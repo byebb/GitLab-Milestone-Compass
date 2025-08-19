@@ -1,0 +1,564 @@
+/* GitLab Milestone Assignee Filter Styles */
+
+.milestone-assignee-filter {
+    margin-top: 5px;
+    background: #28272d;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    padding: 16px;
+    /* padding-bottom: 0px; */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Search Container Styles */
+.milestone-assignee-filter .search-container {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 6px 10px;
+    background: #2d2b32;
+    border: 1px solid #404040;
+    border-radius: 6px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+    min-width: 180px;
+    max-width: 280px;
+    height: 40px;
+}
+
+.milestone-assignee-filter .issue-search-input {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 12px;
+    background: #3a383f;
+    border: 2px solid #555555;
+    border-radius: 4px;
+    color: #ffffff;
+    transition: all 0.3s ease;
+    text-align: center;
+    height: 28px;
+    box-sizing: border-box;
+}
+
+.milestone-assignee-filter .issue-search-input:focus {
+    outline: none;
+    border-color: #1f75cb;
+    box-shadow: 0 0 0 3px rgba(31, 117, 203, 0.25);
+    background: #424242;
+}
+
+.milestone-assignee-filter .issue-search-input::placeholder {
+    color: #888888;
+    font-style: italic;
+}
+
+.milestone-assignee-filter .issue-search-input.has-search {
+    border-color: #1fcb3c;
+    background: #2d4a4a;
+}
+
+.milestone-assignee-filter .search-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+    justify-content: center;
+    min-width: 140px;
+    margin-left: 12px;
+}
+
+.milestone-assignee-filter #search-results-count {
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 11px;
+    color: #1fcb3c;
+    height: 24px;
+    line-height: 16px;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.milestone-assignee-filter .clear-search-btn {
+    background: #700505;
+    border: 1px solid #700505;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    height: 24px;
+    line-height: 16px;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.milestone-assignee-filter .clear-search-btn:hover {
+    background: #c91a00;
+    border-color: #c91a00;
+}
+
+
+/* Responsive search container */
+@media (max-width: 768px) {
+    .milestone-assignee-filter .filter-controls-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        text-align: center;
+    }
+    
+    .milestone-assignee-filter .search-container {
+        padding: 6px 10px;
+        min-width: auto;
+        max-width: 100%;
+        width: 100%;
+        justify-self: stretch;
+    }
+    
+    .milestone-assignee-filter .issue-search-input {
+        max-width: 100%;
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+    
+    .milestone-assignee-filter .search-info {
+        flex-direction: row;
+        gap: 8px;
+        text-align: center;
+        height: auto;
+        min-width: auto;
+        margin-left: 0;
+        margin-top: 8px;
+        justify-content: center;
+    }
+    
+    .milestone-assignee-filter .filter-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+}
+
+/* Toggle Button Styles */
+.assignee-filter-toggle,
+.label-filter-toggle {
+    background-color: #404040 !important;
+    border-color: #555555 !important;
+    color: #ffffff !important;
+    font-size: 13px !important;
+    padding: 6px 12px !important;
+    transition: all 0.2s ease !important;
+}
+
+.assignee-filter-toggle:hover,
+.label-filter-toggle:hover {
+    background-color: #4a4a4a !important;
+    border-color: #666666 !important;
+    color: #ffffff !important;
+}
+
+.assignee-filter-toggle.btn-outline,
+.label-filter-toggle.btn-outline {
+    background-color: transparent !important;
+    border-color: #555555 !important;
+    color: #cccccc !important;
+}
+
+.assignee-filter-toggle .gl-button-icon,
+.label-filter-toggle .gl-button-icon {
+    margin-right: 4px !important;
+}
+
+.assignee-filter-toggle .gl-button-text,
+.label-filter-toggle .gl-button-text {
+    font-weight: 500 !important;
+}
+
+.milestone-assignee-filter .filter-header {
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.milestone-assignee-filter .filter-header h4 {
+    margin: 0;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.milestone-assignee-filter .filter-controls-row {
+    display: grid;
+    grid-template-columns: 0.2fr 0.2fr 1fr;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 6px;
+}
+
+.milestone-assignee-filter .filter-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+
+.milestone-assignee-filter .filter-btn {
+    background: #3a383f;
+    border: 1px solid #555555;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #ffffff;
+}
+
+.milestone-assignee-filter .filter-btn:hover {
+    background: #3a383f;
+    border-color: #666666;
+}
+
+.milestone-assignee-filter .filter-btn.active {
+    background: #163c63;
+    border-color: #163c63;
+    color: white;
+}
+
+.milestone-assignee-filter .filter-clear {
+    background: #700505;
+    border-color: #700505;
+    color: white;
+}
+
+.milestone-assignee-filter .label-reset-btn {
+    background: #700505;
+    border-color: #700505;
+    color: white;
+}
+
+.milestone-assignee-filter .filter-clear:hover {
+    background: #c91a00;
+    border-color: #c91a00;
+}
+
+.milestone-assignee-filter .filter-section {
+    margin-top: 20px;
+}
+
+.milestone-assignee-filter .filter-section:last-child {
+    margin-bottom: 0;
+}
+
+.milestone-assignee-filter .filter-section h5 {
+    margin: 0 0 12px 0;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    border-bottom: 1px solid #555555;
+    padding-bottom: 6px;
+}
+
+.milestone-assignee-filter .assignee-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 4px;
+    align-content: flex-start;
+}
+
+.milestone-assignee-filter .label-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 4px;
+    align-content: flex-start;
+}
+
+.milestone-assignee-filter .assignee-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: #3a383f;
+    border: 1px solid #555555;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 120px;
+    max-width: 200px;
+}
+
+.milestone-assignee-filter .assignee-item:hover {
+    background: #3a383f;
+    border-color: #1f75cb;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(31, 117, 203, 0.25);
+}
+
+.milestone-assignee-filter .assignee-item.selected {
+    background: linear-gradient(135deg, #1a6b32, #2a7b35);
+    border: 2px solid #1fcb3c;
+    box-shadow: 0 0 0 1px rgba(31, 203, 45, 0.3), 
+                0 2px 8px rgba(31, 203, 40, 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.milestone-assignee-filter .assignee-item.selected::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    background: #1fcb3c;
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(31, 203, 54, 0.6);
+}
+
+.milestone-assignee-filter .assignee-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.milestone-assignee-filter .assignee-name {
+    font-weight: 500;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+    font-size: 10px;
+}
+
+.milestone-assignee-filter .issue-count {
+    font-size: 11px;
+    color: #cccccc;
+    background: #555555;
+    padding: 1px 4px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    min-width: 18px;
+    text-align: center;
+}
+
+/* Label Item Styles */
+.milestone-assignee-filter .label-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    background: #3a3a3a;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    font-size: 11px;
+    max-width: 120px;
+    flex: 1 1 auto;
+    min-width: 90px;
+}
+
+.milestone-assignee-filter .label-item:hover {
+    background: #424242;
+    border-color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(197, 197, 197, 0.25);
+}
+
+.milestone-assignee-filter .label-item.selected {
+    background: linear-gradient(135deg, #7a7a7a, #636363);
+    border: 2px solid #d1d1d1;
+    box-shadow: 0 0 0 1px rgba(212, 212, 212, 0.3), 
+                0 2px 8px rgba(190, 190, 190, 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.milestone-assignee-filter .label-item.selected::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 6px;
+    height: 6px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 3px rgba(204, 204, 204, 0.8);
+}
+
+.milestone-assignee-filter .label-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 4px;
+    border-radius: 3px;
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Search highlighting styles */
+.search-highlight {
+    /* background-color: #00b906 !important; */
+    color: #ffffff !important;
+    /* padding: 1px 3px !important; */
+    border-radius: 3px !important;
+    text-decoration: underline !important;
+    text-decoration-color: #00ff08 !important;
+    text-decoration-thickness: 2px !important;
+    text-underline-offset: 1px !important;
+    display: inline !important;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .milestone-assignee-filter .filter-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .milestone-assignee-filter .filter-controls {
+        justify-content: center;
+    }
+    
+    .milestone-assignee-filter .assignee-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        max-height: 200px;
+    }
+    
+    .milestone-assignee-filter .label-grid {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        max-height: 200px;
+    }
+    
+    .milestone-assignee-filter .assignee-item {
+        padding: 6px 8px;
+        gap: 6px;
+    }
+    
+    .milestone-assignee-filter .assignee-name {
+        font-size: 10px;
+    }
+}
+
+/* Integration with GitLab styles */
+.milestone-assignee-filter {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+
+/* Animation for filtered content */
+.issuable-row {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.issuable-row[style*="display: none"] {
+    opacity: 0;
+    transform: scale(0.95);
+}
+
+/* Highlight active filter in section headers */
+.gl-card-header .gl-text-subtle span[style*="color: #1f75cb"] {
+    background: rgba(31, 117, 203, 0.2);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Loading state */
+.milestone-assignee-filter.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.milestone-assignee-filter.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #1f75cb;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Scrollbar styling for assignee grid */
+.milestone-assignee-filter .assignee-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.milestone-assignee-filter .assignee-grid::-webkit-scrollbar-track {
+    background: #28272d;
+    border-radius: 3px;
+}
+
+.milestone-assignee-filter .assignee-grid::-webkit-scrollbar-thumb {
+    background: #555555;
+    border-radius: 3px;
+}
+
+.milestone-assignee-filter .assignee-grid::-webkit-scrollbar-thumb:hover {
+    background: #666666;
+}
+
+/* Label Search Input */
+.milestone-assignee-filter #label-search-input {
+    background: #3a3a3a !important;
+    border: 1px solid #555555 !important;
+    color: #ffffff !important;
+    font-size: 12px !important;
+    padding: 6px 8px !important;
+    border-radius: 4px !important;
+    width: 100% !important;
+    max-width: 250px !important;
+    transition: border-color 0.2s ease !important;
+}
+
+.milestone-assignee-filter #label-search-input:focus {
+    outline: none !important;
+    border-color: #1f75cb !important;
+    box-shadow: 0 0 0 2px rgba(31, 117, 203, 0.25) !important;
+}
+
+.milestone-assignee-filter #label-search-input::placeholder {
+    color: #888888 !important;
+    font-style: italic !important;
+}
+
+/* No results message styling */
+.milestone-assignee-filter .no-results-message {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    color: #888888 !important;
+    font-style: italic !important;
+    padding: 20px !important;
+    font-size: 12px !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+    border: 1px dashed #555555 !important;
+    border-radius: 4px !important;
+    margin: 4px 0 !important;
+}

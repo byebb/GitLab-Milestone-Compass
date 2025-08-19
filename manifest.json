@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "GitLab Milestone Compass",
+  "version": "1.1",
+  "description": "Adds powerful filtering capabilities to GitLab milestone pages with assignee and label filters",
+  "author": "Matthias Miller",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*/*/milestones/*",
+        "*://gitlab.com/*/*/milestones/*",
+        "*://*.gitlab.com/*/*/milestones/*",
+        "*://*/*/-/milestones/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
