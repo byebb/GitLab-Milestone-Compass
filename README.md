@@ -1,4 +1,4 @@
-# GitLab Milestone Advanced Filters
+# GitLab Milestone Compass 🧭
 
 A Chrome extension that adds powerful filtering capabilities to GitLab milestone pages with assignee and label filters.
 
