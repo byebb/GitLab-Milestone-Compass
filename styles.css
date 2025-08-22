@@ -522,6 +522,80 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 16px;
+}
+
+/* Kanban Profile Chips */
+.kanban-profile-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    flex: 1;
+    justify-content: center;
+}
+
+.kanban-profile-chip {
+    background: var(--gray-700, #525252);
+    border: 1px solid var(--gray-600, #666666);
+    color: var(--gray-100, #f5f5f5);
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.kanban-profile-chip:hover {
+    background: var(--gray-600, #666666);
+    border-color: var(--blue-400, #6bb6ff);
+    box-shadow: 0 1px 3px rgba(107, 182, 255, 0.25);
+}
+
+.kanban-profile-chip.active {
+    background: var(--blue-600, #357abd);
+    border-color: var(--blue-500, #428bca);
+    color: var(--white, #ffffff);
+    box-shadow: 0 1px 3px rgba(53, 122, 189, 0.4);
+}
+
+.kanban-profile-chip.active:hover {
+    background: var(--blue-500, #428bca);
+    border-color: var(--blue-400, #6bb6ff);
+}
+
+/* Kanban header controls styling */
+.kanban-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Hide closed toggle styling */
+.hide-closed-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--gl-text-color, #e0e0e0);
+    cursor: pointer;
+    margin: 0;
+    user-select: none;
+}
+
+.hide-closed-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--blue-500, #3b82f6);
+}
+
+.hide-closed-toggle .toggle-label {
+    font-weight: 500;
+    white-space: nowrap;
 }
 
 .kanban-header .gl-card-title {
@@ -657,7 +731,40 @@
     display: inline-block;
 }
 
+/* Kanban Status Badge */
+.kanban-status-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+    cursor: help;
+    z-index: 10;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
 /* Dynamic contrast colors are applied via inline styles by JavaScript */
+
+/* Bright Button Text Contrast Fix */
+.btn.bright-background,
+.label-badge.bright-background,
+.kanban-label.bright-background {
+    color: #000000 !important;
+}
+
+.btn.dark-background,
+.label-badge.dark-background,
+.kanban-label.dark-background {
+    color: #ffffff !important;
+}
 
 .kanban-more-labels {
     font-size: 9px;
@@ -709,13 +816,25 @@
     background: var(--gray-900, #2d2d2d);
     border: 1px solid var(--gray-700, #525252);
     border-radius: 8px;
-    padding: 24px;
     width: 90%;
     max-width: 800px;
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    max-height: 90vh;
     color: var(--gray-100, #f5f5f5);
+    position: relative;
+    display: grid;
+    grid-template-rows: auto 1fr auto auto; /* Header, Content, Profile buttons, Main buttons */
+    grid-template-areas: 
+        "header"
+        "content" 
+        "profile-actions"
+        "main-actions";
+    gap: 16px;
+    padding: 24px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.kanban-config-header {
+    grid-area: header;
 }
 
 .kanban-config-content h3 {
@@ -733,13 +852,16 @@
 
 .kanban-config-labels {
     display: flex;
-    gap: 24px;
-    margin-bottom: 24px;
+    gap: 16px;
+    flex: 1;
+    margin-bottom: 16px;
 }
 
 .available-labels,
 .selected-labels {
     flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .available-labels h4,
@@ -755,8 +877,9 @@
     border: 1px solid var(--gray-600, #666666);
     border-radius: 4px;
     padding: 12px;
-    min-height: 200px;
-    max-height: 300px;
+    flex: 1;
+    min-height: 250px;
+    max-height: 350px;
     overflow-y: auto;
     background: var(--gray-800, #3d3d3d);
 }
@@ -847,7 +970,9 @@
     justify-content: flex-end;
     padding-top: 16px;
     border-top: 1px solid var(--gray-600, #666666);
-    margin-top: 20px;
+    position: relative;
+    z-index: 100; /* High z-index for main modal close button */
+    grid-area: main-actions;
 }
 
 /* Kanban Configuration Action Buttons */
@@ -906,6 +1031,216 @@
 .kanban-config-actions .btn:focus {
     outline: 2px solid var(--blue-200, #9dc7f1);
     outline-offset: 2px;
+}
+
+/* Kanban Profile Management */
+.kanban-profile-management {
+    display: flex;
+    gap: 20px;
+    height: 500px; /* Fixed height for better space utilization */
+    grid-area: content;
+    overflow: hidden;
+}
+
+.kanban-profile-management h3,
+.kanban-profile-management h4 {
+    color: black;
+}
+
+.profile-selector {
+    flex: 0 0 280px; /* Fixed width for profile list */
+    min-width: 280px;
+    display: flex;
+    flex-direction: column;
+}
+
+.profile-editor {
+    flex: 1; /* Take remaining space */
+    display: flex;
+    flex-direction: column;
+}
+
+.profile-list {
+    border: 1px solid var(--gray-600, #666666);
+    border-radius: 4px;
+    background: var(--gray-800, #3d3d3d);
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+}
+
+.profile-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--gray-700, #525252);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.profile-item:last-child {
+    border-bottom: none;
+}
+
+.profile-item:hover {
+    background: var(--gray-700, #525252);
+}
+
+.profile-item.active {
+    background: var(--blue-900, #1e3a5f);
+    border-color: var(--blue-500, #428bca);
+}
+
+.profile-title {
+    font-weight: 500;
+    color: var(--gray-100, #f5f5f5);
+}
+
+.profile-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-edit-profile,
+.btn-delete-profile {
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+.btn-edit-profile:hover {
+    background: var(--gray-600, #666666);
+}
+
+.btn-delete-profile:hover {
+    background: var(--red-600, #dc3545);
+}
+
+.add-profile-btn {
+    width: 100%;
+    justify-content: center;
+    background: var(--gray-700, #525252) !important;
+    border: 1px solid var(--gray-600, #666666) !important;
+    color: var(--gray-100, #f5f5f5) !important;
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.add-profile-btn:hover {
+    background: var(--gray-600, #666666) !important;
+    border-color: var(--gray-500, #808080) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Profile Form */
+.profile-form {
+    border: 1px solid var(--gray-600, #666666);
+    border-radius: 4px;
+    background: var(--gray-800, #3d3d3d);
+    padding: 16px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.form-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--gray-600, #666666);
+    border-radius: 4px;
+    background: var(--gray-700, #525252);
+    color: var(--gray-100, #f5f5f5);
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--blue-400, #6bb6ff);
+    box-shadow: 0 0 0 2px rgba(107, 182, 255, 0.25);
+}
+
+.form-input::placeholder {
+    color: var(--gray-400, #999999);
+}
+
+.profile-form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-600, #666666);
+    position: relative;
+    z-index: 1; /* Ensure it stays below modal close button */
+    grid-area: profile-actions;
+}
+
+/* Profile form actions are now controlled via JavaScript */
+
+/* Profile Form Buttons */
+.profile-form-actions .btn {
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 4px;
+    font-weight: 500;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.profile-form-actions .btn-success {
+    background: var(--green-600, #1f8a44);
+    border-color: var(--green-700, #0d6837);
+    color: var(--white, #ffffff);
+}
+
+.profile-form-actions .btn-success:hover {
+    background: var(--green-500, #27a356);
+    border-color: var(--green-600, #1f8a44);
+    box-shadow: 0 2px 4px rgba(31, 138, 68, 0.3);
+}
+
+.profile-form-actions .btn-outline {
+    background: var(--gray-700, #525252);
+    border-color: var(--gray-600, #666666);
+    color: var(--gray-100, #f5f5f5);
+}
+
+.profile-form-actions .btn-outline:hover {
+    background: var(--gray-600, #666666);
+    border-color: var(--gray-500, #808080);
+    color: var(--gray-100, #f5f5f5);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.save-profile-btn {
+    background: var(--green-600, #1f8a44) !important;
+    border-color: var(--green-700, #0d6837) !important;
+    color: var(--white, #ffffff) !important;
+}
+
+.save-profile-btn:hover {
+    background: var(--green-500, #27a356) !important;
+    border-color: var(--green-600, #1f8a44) !important;
+}
+
+.cancel-profile-btn {
+    background: var(--gray-700, #525252) !important;
+    border-color: var(--gray-600, #666666) !important;
+    color: var(--gray-100, #f5f5f5) !important;
+}
+
+.cancel-profile-btn:hover {
+    background: var(--gray-600, #666666) !important;
+    border-color: var(--gray-500, #808080) !important;
 }
 
 .kanban-config-actions .btn:disabled {

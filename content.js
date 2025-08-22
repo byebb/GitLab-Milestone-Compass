@@ -17,8 +17,13 @@
 
     // Wait a bit for dynamic content to load
     setTimeout(() => {
+      // Build initial issue status mapping
+      buildIssueStatusMap();
       createAssigneeFilter();
-    }, 500);
+      
+      // Initialize proper view mode after filters are created
+      initializeViewMode();
+    }, 600);
   }
 
   // LocalStorage functions for alternative assignee prefix (per repository)
@@ -64,34 +69,108 @@
     }
   }
 
-  // LocalStorage functions for Kanban board configuration
-  function saveKanbanConfig(labels) {
+  // LocalStorage functions for Kanban board profiles
+  function saveKanbanProfiles(profiles) {
     try {
-      const key = getMilestoneKey() + "-kanban";
+      const key = getMilestoneKey() + "-kanban-profiles";
       const config = {
-        labels: labels,
+        profiles: profiles,
         timestamp: Date.now(),
       };
       localStorage.setItem(key, JSON.stringify(config));
     } catch (e) {
-      // Could not save Kanban configuration
+      console.error("Could not save Kanban profiles:", e);
     }
   }
 
-  function loadKanbanConfig() {
+  function loadKanbanProfiles() {
     try {
-      const key = getMilestoneKey() + "-kanban";
+      const key = getMilestoneKey() + "-kanban-profiles";
       const stored = localStorage.getItem(key);
       if (stored) {
         const config = JSON.parse(stored);
-        // Return stored config if recent (within 30 days)
+        // Return stored profiles if recent (within 30 days)
         const isRecent = config.timestamp && Date.now() - config.timestamp < 30 * 24 * 60 * 60 * 1000;
-        return isRecent ? config.labels : [];
+        if (isRecent && config.profiles) {
+          return config.profiles;
+        }
       }
     } catch (e) {
-      // Could not load Kanban configuration
+      console.error("Could not load Kanban profiles:", e);
     }
-    return [];
+    
+    // Try to migrate old single config to profile format
+    return migrateOldKanbanConfig();
+  }
+
+  function saveActiveKanbanProfile(profileId) {
+    try {
+      const key = getMilestoneKey() + "-kanban-active";
+      localStorage.setItem(key, profileId);
+    } catch (e) {
+      console.error("Could not save active Kanban profile:", e);
+    }
+  }
+
+  function loadActiveKanbanProfile() {
+    try {
+      const key = getMilestoneKey() + "-kanban-active";
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.error("Could not load active Kanban profile:", e);
+    }
+    return null;
+  }
+
+  // Legacy support - convert old single config to profile format
+  function migrateOldKanbanConfig() {
+    try {
+      const oldKey = getMilestoneKey() + "-kanban";
+      const stored = localStorage.getItem(oldKey);
+      
+      if (stored) {
+        const config = JSON.parse(stored);
+        const isRecent = config.timestamp && Date.now() - config.timestamp < 30 * 24 * 60 * 60 * 1000;
+        
+        if (isRecent && config.labels && config.labels.length > 0) {
+          const profiles = {
+            'default': {
+              id: 'default',
+              title: 'Default',
+              labels: config.labels
+            }
+          };
+          saveKanbanProfiles(profiles);
+          saveActiveKanbanProfile('default');
+          localStorage.removeItem(oldKey); // Clean up old config
+          console.log('Migrated old Kanban config to profile format');
+          return profiles;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to migrate old Kanban config:', e);
+    }
+    return {};
+  }
+
+  // Legacy function for backward compatibility
+  function loadKanbanConfig() {
+    const profiles = loadKanbanProfiles();
+    const activeProfileId = loadActiveKanbanProfile();
+    
+    console.log(`Loading Kanban config - Active profile: ${activeProfileId}, Available profiles:`, Object.keys(profiles));
+    
+    if (activeProfileId && profiles[activeProfileId]) {
+      const config = profiles[activeProfileId].labels || [];
+      console.log(`Loaded config for profile ${activeProfileId}:`, config);
+      return config;
+    }
+    
+    // Return first available profile's labels
+    const firstProfile = Object.values(profiles)[0];
+    const config = firstProfile ? firstProfile.labels || [] : [];
+    console.log(`Using first available profile config:`, config);
+    return config;
   }
 
   function saveViewMode(mode) {
@@ -1226,7 +1305,94 @@
     const kanbanBoard = document.querySelector("#kanban-board");
     if (kanbanBoard && kanbanBoard.style.display !== "none") {
       renderKanbanBoard(kanbanBoard);
+      
+      // Apply search highlighting to Kanban cards if there's an active search (with delay)
+      const searchInput = document.getElementById("issue-title-search");
+      if (searchInput && searchInput.value.trim() !== "") {
+        setTimeout(() => {
+          highlightKanbanSearchMatches(searchInput.value.trim());
+        }, 100);
+      }
+      
+      // Apply hide closed filter (always run to ensure correct visibility)
+      applyHideClosedFilter();
+      
+      // Update column counts and hide empty columns after all filters are applied (with delay)
+      setTimeout(() => {
+        updateKanbanColumnCounts();
+      }, 150);
     }
+  }
+
+  // Function to highlight search matches in Kanban card titles
+  function highlightKanbanSearchMatches(searchTerm) {
+    if (!searchTerm || searchTerm.trim() === "") {
+      // Remove all highlighting when no search term
+      document.querySelectorAll(".kanban-card .search-highlight").forEach((highlight) => {
+        const parent = highlight.parentNode;
+        if (parent) {
+          parent.replaceChild(
+            document.createTextNode(highlight.textContent),
+            highlight
+          );
+          parent.normalize();
+        }
+      });
+      return;
+    }
+
+    const normalizedSearchTerm = searchTerm.toLowerCase();
+    const kanbanCards = document.querySelectorAll(".kanban-card");
+
+    kanbanCards.forEach((card) => {
+      const titleLink = card.querySelector(".kanban-card-title a");
+      if (!titleLink) return;
+
+      const titleText = titleLink.textContent;
+      const title = titleText.toLowerCase();
+
+      // Remove existing highlights first
+      if (titleLink.innerHTML.includes("search-highlight")) {
+        titleLink.textContent = titleText;
+      }
+
+      // Check if title contains the search term
+      if (title.includes(normalizedSearchTerm)) {
+        // Create regex for case-insensitive matching
+        const searchRegex = new RegExp(
+          `(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+          "gi"
+        );
+
+        const matches = [...titleText.matchAll(searchRegex)];
+
+        if (matches.length > 0) {
+          let highlightedText = titleText;
+          let offset = 0;
+
+          // Replace each match with highlighted version
+          matches.forEach((match) => {
+            const startIndex = match.index + offset;
+            const endIndex = startIndex + match[0].length;
+
+            const before = highlightedText.substring(0, startIndex);
+            const matchText = highlightedText.substring(startIndex, endIndex);
+            const after = highlightedText.substring(endIndex);
+
+            highlightedText =
+              before +
+              `<span class="search-highlight">${matchText}</span>` +
+              after;
+
+            // Adjust offset for next iteration
+            offset += '<span class="search-highlight"></span>'.length;
+          });
+
+          // Set highlighted HTML
+          titleLink.innerHTML = highlightedText;
+        }
+      }
+    });
   }
 
   function updateAssigneeCounts(assignees) {
@@ -1980,6 +2146,9 @@
     if (!searchInput || !clearSearchBtn || !searchResultsCount) return;
 
     const normalizedSearchTerm = searchTerm.toLowerCase();
+    
+    // Update current filters to include title search
+    currentFilters.titleSearch = searchTerm;
 
     if (normalizedSearchTerm === "") {
       // No search term - show all issues based on current filters and hide clear button and results count
@@ -2151,6 +2320,9 @@
     const clearSearchBtn = document.getElementById("clear-search");
     const searchResultsCount = document.getElementById("search-results-count");
 
+    // Clear current filters title search
+    currentFilters.titleSearch = "";
+
     if (searchInput) {
       searchInput.value = "";
       searchInput.classList.remove("has-search");
@@ -2171,6 +2343,9 @@
 
     // Remove all search highlighting
     highlightSearchMatches("");
+    
+    // Also clear Kanban search highlighting
+    highlightKanbanSearchMatches("");
 
     // Clear search styling from all issues - this removes the highlighting
     document.querySelectorAll(".issuable-row").forEach((issue) => {
@@ -2236,6 +2411,10 @@
     console.log("GitLab Milestone Compass: Toggling from", currentMode, "to", newMode);
     saveViewMode(newMode);
     
+    // Ensure clean state transition - hide both views first
+    hideKanbanBoard();
+    hideStatusSections();
+    
     if (newMode === "kanban") {
       console.log("GitLab Milestone Compass: Switching to Kanban view");
       showKanbanView();
@@ -2265,19 +2444,40 @@
   }
 
   function showKanbanView() {
-    // Hide the default status-based sections
+    console.log("GitLab Milestone Compass: Showing Kanban view");
+    
+    // Ensure status sections are hidden
     hideStatusSections();
     
     // Show or create the Kanban board
     createKanbanBoard();
+    
+    // Apply search highlighting if there's an active search (with delay to ensure cards are rendered)
+    const searchInput = document.getElementById("issue-title-search");
+    if (searchInput && searchInput.value.trim() !== "") {
+      setTimeout(() => {
+        highlightKanbanSearchMatches(searchInput.value.trim());
+      }, 100);
+    }
+    
+    // Update column counts and hide empty columns
+    setTimeout(() => updateKanbanColumnCounts(), 150);
   }
 
   function showStatusView() {
-    // Hide the Kanban board
+    console.log("GitLab Milestone Compass: Showing Status view");
+    
+    // Ensure Kanban board is hidden
     hideKanbanBoard();
     
     // Show the default status-based sections
     showStatusSections();
+    
+    // Apply search highlighting if there's an active search
+    const searchInput = document.getElementById("issue-title-search");
+    if (searchInput && searchInput.value.trim() !== "") {
+      highlightSearchMatches(searchInput.value.trim());
+    }
   }
 
   function hideStatusSections() {
@@ -2304,6 +2504,11 @@
   }
 
   function createKanbanBoard() {
+    console.log("GitLab Milestone Compass: Creating Kanban board");
+    
+    // Build issue status mapping for reliable status detection
+    buildIssueStatusMap();
+    
     let kanbanBoard = document.querySelector("#kanban-board");
     
     if (!kanbanBoard) {
@@ -2331,23 +2536,36 @@
   }
 
   function renderKanbanBoard(kanbanBoard) {
+    const profiles = loadKanbanProfiles();
+    const activeProfileId = loadActiveKanbanProfile();
     const config = loadKanbanConfig();
     const allLabels = extractLabels();
     
-    // If no config exists, show a message and configuration option
-    if (config.length === 0) {
+    console.log(`Rendering Kanban board - Profiles: ${Object.keys(profiles).length}, Active: ${activeProfileId}, Config:`, config, 'Available labels:', allLabels.length);
+    
+    // If no profiles exist, show empty state
+    if (Object.keys(profiles).length === 0) {
       kanbanBoard.innerHTML = `
         <div class="gl-card kanban-header">
           <div class="gl-card-header">
             <h3 class="gl-card-title">Kanban Board</h3>
-            <button class="btn btn-sm btn-default configure-kanban-btn">Configure Columns</button>
+            <div class="kanban-profile-chips">
+              <!-- No profiles yet -->
+            </div>
+            <div class="kanban-header-controls">
+              <label class="kanban-toggle hide-closed-toggle">
+                <input type="checkbox" id="hide-closed-issues" />
+                <span class="toggle-label">Hide Closed</span>
+              </label>
+              <button class="btn btn-sm btn-default configure-kanban-btn">Configure Profiles</button>
+            </div>
           </div>
         </div>
         <div class="kanban-empty-state">
           <div class="kanban-empty-content">
             <h4>Configure Your Kanban Board</h4>
-            <p>Select the labels you want to use as columns for your Kanban board.</p>
-            <button class="btn btn-default btn-md configure-kanban-action">Choose Labels</button>
+            <p>Create profiles with different label combinations for your Kanban board.</p>
+            <button class="btn btn-default btn-md configure-kanban-action">Create Profile</button>
           </div>
         </div>
       `;
@@ -2359,14 +2577,42 @@
       kanbanBoard.querySelector(".configure-kanban-action").addEventListener("click", () => {
         showKanbanConfiguration(allLabels);
       });
+      
+      // Add hide closed issues toggle handler for empty state
+      const hideClosedToggle = kanbanBoard.querySelector("#hide-closed-issues");
+      if (hideClosedToggle) {
+        const hideClosedState = loadHideClosedState();
+        hideClosedToggle.checked = hideClosedState;
+        
+        hideClosedToggle.addEventListener("change", (e) => {
+          const hideClosedIssues = e.target.checked;
+          saveHideClosedState(hideClosedIssues);
+          // No need to apply filter in empty state
+        });
+      }
       return;
     }
+    
+    // Render header with profile chips
+    const profileChipsHtml = Object.values(profiles).map(profile => {
+      const isActive = profile.id === activeProfileId;
+      return `<span class="kanban-profile-chip ${isActive ? 'active' : ''}" data-profile-id="${profile.id}">${profile.title}</span>`;
+    }).join('');
     
     kanbanBoard.innerHTML = `
       <div class="gl-card kanban-header">
         <div class="gl-card-header">
           <h3 class="gl-card-title">Kanban Board</h3>
-          <button class="btn btn-sm btn-default configure-kanban-btn">Configure</button>
+          <div class="kanban-profile-chips">
+            ${profileChipsHtml}
+          </div>
+          <div class="kanban-header-controls">
+            <label class="kanban-toggle hide-closed-toggle">
+              <input type="checkbox" id="hide-closed-issues" />
+              <span class="toggle-label">Hide Closed</span>
+            </label>
+            <button class="btn btn-sm btn-default configure-kanban-btn">Configure</button>
+          </div>
         </div>
       </div>
       <div class="kanban-columns-container">
@@ -2378,25 +2624,93 @@
     kanbanBoard.querySelector(".configure-kanban-btn").addEventListener("click", () => {
       showKanbanConfiguration(allLabels);
     });
+    
+    // Add hide closed issues toggle handler
+    const hideClosedToggle = kanbanBoard.querySelector("#hide-closed-issues");
+    if (hideClosedToggle) {
+      // Load saved state
+      const hideClosedState = loadHideClosedState();
+      hideClosedToggle.checked = hideClosedState;
+      
+      hideClosedToggle.addEventListener("change", (e) => {
+        const hideClosedIssues = e.target.checked;
+        saveHideClosedState(hideClosedIssues);
+        applyHideClosedFilter();
+        
+        // Ensure column hiding happens after filter is applied
+        setTimeout(() => {
+          updateKanbanColumnCounts();
+        }, 50);
+      });
+      
+      // Apply initial filter state (always run to ensure correct visibility)
+      applyHideClosedFilter();
+      
+      // Apply initial search highlighting if there's an active search
+      const searchInput = document.getElementById("issue-title-search");
+      if (searchInput && searchInput.value.trim() !== "") {
+        setTimeout(() => {
+          highlightKanbanSearchMatches(searchInput.value.trim());
+        }, 100);
+      }
+    }
+    
+    // Add profile chip handlers
+    const profileChips = kanbanBoard.querySelectorAll(".kanban-profile-chip");
+    profileChips.forEach(chip => {
+      chip.addEventListener("click", () => {
+        const profileId = chip.dataset.profileId;
+        switchKanbanProfile(profileId);
+      });
+    });
+  }
+
+  function switchKanbanProfile(profileId) {
+    const profiles = loadKanbanProfiles();
+    if (profiles[profileId]) {
+      saveActiveKanbanProfile(profileId);
+      console.log(`Switching to profile: ${profiles[profileId].title}, Labels: ${profiles[profileId].labels?.join(', ') || 'none'}`);
+      
+      const kanbanBoard = document.getElementById("kanban-board");
+      if (kanbanBoard) {
+        // Clear the board completely before re-rendering to prevent accumulation
+        kanbanBoard.innerHTML = '';
+        renderKanbanBoard(kanbanBoard);
+      }
+      console.log(`Switched to Kanban profile: ${profiles[profileId].title}`);
+    } else {
+      console.error(`Profile ${profileId} not found in:`, profiles);
+    }
   }
 
   function renderKanbanColumns(config, allLabels) {
-    const allIssues = document.querySelectorAll(".issuable-row");
+    // Get fresh DOM selection every time, but EXCLUDE any existing Kanban cards to prevent duplicates
+    const allIssueElements = document.querySelectorAll(".issuable-row");
+    const allIssues = Array.from(allIssueElements).filter(issue => {
+      // Exclude any issues that are already in Kanban cards to prevent duplication
+      return !issue.classList.contains('kanban-card');
+    });
+    
     let columns = "";
     let usedIssues = new Set(); // Track issues already placed in columns
+    
+    console.log(`Kanban render: Found ${allIssueElements.length} total issue elements, ${allIssues.length} original issues (excluding kanban cards), Config labels: ${config.join(', ')}`);
     
     // Create columns for configured labels (only if they have issues)
     config.forEach(labelName => {
       const label = allLabels.find(l => l.name === labelName);
       if (label) {
         const issues = getFilteredIssuesForKanbanLabel(labelName, allIssues);
+        console.log(`Label "${labelName}": Found ${issues.length} issues`);
         // Only create column if it has issues
         if (issues.length > 0) {
           columns += createKanbanColumn(label, issues);
-          // Track these issues as used
+          // Track these issues as used to prevent duplicates in MISC
           issues.forEach(issue => {
             const issueUrl = getIssueUrlFromElement(issue);
-            if (issueUrl) usedIssues.add(issueUrl);
+            if (issueUrl) {
+              usedIssues.add(issueUrl);
+            }
           });
         }
       }
@@ -2404,6 +2718,8 @@
     
     // Add MISC column for remaining issues (only issues NOT in other columns)
     const miscIssues = getFilteredMiscIssuesForKanban(config, allIssues, usedIssues);
+    console.log(`MISC column: Found ${miscIssues.length} unique issues not in other columns (${usedIssues.size} issues already used)`);
+    
     if (miscIssues.length > 0) {
       columns += createMiscColumn(miscIssues);
     }
@@ -2463,6 +2779,305 @@
     `;
   }
 
+  function getIssueStatus(issue) {
+    // Get issue URL for debugging
+    const issueLink = issue.querySelector('a[href*="/issues/"]');
+    const issueUrl = issueLink ? issueLink.href : 'unknown';
+    console.log(`\n=== Checking status for issue: ${issueUrl} ===`);
+    
+    // Strategy 0: Check the pre-built status mapping (most reliable)
+    if (issueStatusMap.has(issueUrl)) {
+      const mappedStatus = issueStatusMap.get(issueUrl);
+      console.log(`Issue status found in map: ${mappedStatus}`);
+      return mappedStatus;
+    }
+    
+    // Strategy 1: Check if the issue appears visually closed/struck through
+    const titleLink = issue.querySelector('.issuable-info a, .issue-title-text a, span > a[title]');
+    if (titleLink) {
+      const titleStyle = window.getComputedStyle(titleLink);
+      const textDecoration = titleStyle.textDecoration;
+      console.log('Title style:', { textDecoration, element: titleLink });
+      
+      // Check for strikethrough indicating closed issue
+      if (textDecoration.includes('line-through')) {
+        console.log('Issue identified as completed via strikethrough text');
+        return 'completed';
+      }
+    }
+    
+    // Strategy 1: Check for GitLab's specific closed status indicators
+    // Look for GitLab's standard status badges and state indicators
+    const statusBadge = issue.querySelector('.gl-badge, .badge, .issuable-status, .issue-status');
+    if (statusBadge) {
+      const badgeText = statusBadge.textContent.toLowerCase().trim();
+      const badgeClasses = statusBadge.className.toLowerCase();
+      
+      // Debug logging for status detection
+      console.log('Status badge found:', {
+        text: badgeText,
+        classes: badgeClasses,
+        element: statusBadge
+      });
+      
+      // Check for closed/completed indicators
+      if (badgeText.includes('closed') || 
+          badgeText.includes('completed') || 
+          badgeText.includes('done') ||
+          badgeClasses.includes('closed') ||
+          badgeClasses.includes('state-closed')) {
+        console.log('Issue identified as completed via status badge');
+        return 'completed';
+      }
+    }
+    
+    // Strategy 2: Check GitLab's data attributes and classes on the issue row
+    const dataState = issue.getAttribute('data-state');
+    const dataStatus = issue.getAttribute('data-status');
+    
+    console.log('Data attributes:', { dataState, dataStatus });
+    
+    if (dataState === 'closed' || dataStatus === 'closed') {
+      console.log('Issue identified as completed via data attributes');
+      return 'completed';
+    }
+    
+    // Strategy 3: Check for closed state in CSS classes on the issue element
+    const issueClasses = issue.className.toLowerCase();
+    if (issueClasses.includes('closed') || 
+        issueClasses.includes('state-closed') ||
+        issueClasses.includes('issuable-closed')) {
+      return 'completed';
+    }
+    
+    // Strategy 4: Look for GitLab's typical closed issue visual indicators
+    const closedIcon = issue.querySelector('.fa-check, .fa-check-circle, .gl-icon[name="issue-closed"], [data-testid="issue-closed-icon"]');
+    if (closedIcon) {
+      return 'completed';
+    }
+    
+    // Strategy 5: Check for closed text in issue metadata
+    const issueInfo = issue.querySelector('.issuable-info, .issuable-meta, .issue-meta, .issuable-info-container');
+    if (issueInfo) {
+      const infoText = issueInfo.textContent.toLowerCase();
+      if (infoText.includes('closed') || infoText.includes('completed')) {
+        return 'completed';
+      }
+    }
+    
+    // Strategy 6: Check the entire issue row for closed indicators (last resort)
+    const issueText = issue.textContent.toLowerCase();
+    const issueHTML = issue.outerHTML.toLowerCase();
+    
+    // Be more specific about closed indicators to avoid false positives
+    const strictClosedPatterns = [
+      'state.*closed',
+      'status.*closed', 
+      'issue.*closed',
+      'closed.*issue'
+    ];
+    
+    const hasStrictClosedPattern = strictClosedPatterns.some(pattern => {
+      const regex = new RegExp(pattern);
+      return regex.test(issueHTML) || regex.test(issueText);
+    });
+    
+    if (hasStrictClosedPattern) {
+      console.log('Issue identified as completed via strict pattern matching');
+      return 'completed';
+    }
+    
+    // Strategy 7: Check if issue is in a "closed" or "completed" section
+    const parentSection = issue.closest('.gl-card, .issuable-list, [id*="closed"], [id*="completed"]');
+    if (parentSection) {
+      const sectionId = parentSection.id || '';
+      const sectionClasses = parentSection.className || '';
+      console.log('Parent section:', { id: sectionId, classes: sectionClasses });
+      
+      if (sectionId.includes('closed') || sectionId.includes('completed') ||
+          sectionClasses.includes('closed') || sectionClasses.includes('completed')) {
+        console.log('Issue identified as completed via parent section');
+        return 'completed';
+      }
+    }
+    
+    // Strategy 8: Look for GitLab's specific closed issue indicators more broadly
+    const allElements = issue.querySelectorAll('*');
+    for (const element of allElements) {
+      const elementText = element.textContent.toLowerCase();
+      const elementClasses = element.className.toLowerCase();
+      
+      // Look for GitLab's typical closed indicators
+      if ((elementText.includes('closed') || elementClasses.includes('closed')) &&
+          (elementText.includes('issue') || elementClasses.includes('issue') || 
+           elementClasses.includes('state') || elementClasses.includes('status'))) {
+        console.log('Issue identified as completed via broad element search:', element);
+        return 'completed';
+      }
+    }
+    
+    // Strategy 9: Check the original status-based sections to determine if issue was in closed section
+    const allIssues = document.querySelectorAll('.issuable-row');
+    const closedSection = document.querySelector('#issues-list-closed');
+    
+    if (closedSection) {
+      const closedIssues = closedSection.querySelectorAll('.issuable-row');
+      const isInClosedSection = Array.from(closedIssues).some(closedIssue => {
+        // Compare issue URLs or other unique identifiers
+        const closedIssueLink = closedIssue.querySelector('a[href*="/issues/"]');
+        const currentIssueLink = issue.querySelector('a[href*="/issues/"]');
+        if (closedIssueLink && currentIssueLink) {
+          return closedIssueLink.href === currentIssueLink.href;
+        }
+        return false;
+      });
+      
+      if (isInClosedSection) {
+        console.log('Issue identified as completed via closed section membership');
+        return 'completed';
+      }
+    }
+    
+    // Strategy 10: Check for absence of "open" indicators (GitLab sometimes only shows open state)
+    const openIndicators = issue.querySelectorAll('.state-opened, [data-state="opened"], .issue-state-open, .gl-badge-success');
+    console.log('Open indicators found:', openIndicators.length);
+    
+    // If we found specific "open" indicators and this issue doesn't have them, it might be closed
+    // But this is less reliable, so we'll be conservative here
+    
+    // Now check for assignee (ongoing vs unstarted)
+    const assigneeSelectors = [
+      '.assignee-icon img',
+      '.issuable-assignees img', 
+      '.assignee img',
+      '[data-assignee-id]:not([data-assignee-id=""])',
+      '.author-link img',
+      '.assignee-link'
+    ];
+    
+    let assigneeFound = false;
+    for (const selector of assigneeSelectors) {
+      const element = issue.querySelector(selector);
+      if (element) {
+        console.log('Assignee element found:', { selector, element, src: element.src });
+        if (element.src && !element.src.includes('default') && !element.src.includes('placeholder')) {
+          assigneeFound = true;
+          break;
+        }
+      }
+    }
+    
+    if (assigneeFound) {
+      console.log('Issue identified as ongoing (has assignee)');
+      return 'ongoing';
+    }
+    
+    // No assignee and not closed = unstarted
+    console.log('Issue identified as unstarted (no assignee, not closed)');
+    return 'unstarted';
+  }
+
+  // Issue status mapping for reliable status detection
+  let issueStatusMap = new Map();
+
+  function buildIssueStatusMap() {
+    issueStatusMap.clear();
+    
+    // Map issues from unstarted section
+    const unassignedSection = document.querySelector('#issues-list-unassigned');
+    if (unassignedSection) {
+      const unassignedIssues = unassignedSection.querySelectorAll('.issuable-row');
+      unassignedIssues.forEach(issue => {
+        const link = issue.querySelector('a[href*="/issues/"]');
+        if (link) {
+          issueStatusMap.set(link.href, 'unstarted');
+        }
+      });
+    }
+    
+    // Map issues from ongoing section  
+    const ongoingSection = document.querySelector('#issues-list-ongoing');
+    if (ongoingSection) {
+      const ongoingIssues = ongoingSection.querySelectorAll('.issuable-row');
+      ongoingIssues.forEach(issue => {
+        const link = issue.querySelector('a[href*="/issues/"]');
+        if (link) {
+          issueStatusMap.set(link.href, 'ongoing');
+        }
+      });
+    }
+    
+    // Map issues from closed section
+    const closedSection = document.querySelector('#issues-list-closed');
+    if (closedSection) {
+      const closedIssues = closedSection.querySelectorAll('.issuable-row');
+      closedIssues.forEach(issue => {
+        const link = issue.querySelector('a[href*="/issues/"]');
+        if (link) {
+          issueStatusMap.set(link.href, 'completed');
+        }
+      });
+    }
+    
+    console.log('Issue status map built:', {
+      totalIssues: issueStatusMap.size,
+      map: Array.from(issueStatusMap.entries())
+    });
+  }
+
+  // Helper functions for hide closed issues feature
+  function loadHideClosedState() {
+    const milestoneKey = getMilestoneKey();
+    return localStorage.getItem(`hideClosedIssues_${milestoneKey}`) === 'true';
+  }
+
+  function saveHideClosedState(hideClosedIssues) {
+    const milestoneKey = getMilestoneKey();
+    localStorage.setItem(`hideClosedIssues_${milestoneKey}`, hideClosedIssues.toString());
+  }
+
+  function applyHideClosedFilter() {
+    const hideClosedState = loadHideClosedState();
+    const kanbanCards = document.querySelectorAll('.kanban-card');
+    
+    kanbanCards.forEach(card => {
+      const statusBadge = card.querySelector('.kanban-status-badge');
+      if (statusBadge && statusBadge.textContent.trim() === 'C') {
+        // This is a completed/closed issue
+        if (hideClosedState) {
+          card.style.display = 'none';  // Hide if toggle is checked
+        } else {
+          card.style.display = '';      // Show if toggle is unchecked
+        }
+      } else {
+        card.style.display = '';        // Always show non-closed issues
+      }
+    });
+    
+    // Update column counts after applying filter
+    updateKanbanColumnCounts();
+  }
+
+  function updateKanbanColumnCounts() {
+    const columns = document.querySelectorAll('.kanban-column');
+    
+    columns.forEach(column => {
+      const visibleCards = column.querySelectorAll('.kanban-card:not([style*="display: none"])');
+      const countElement = column.querySelector('.kanban-count');
+      if (countElement) {
+        countElement.textContent = `(${visibleCards.length})`;
+      }
+      
+      // Hide empty columns to avoid unnecessary horizontal scrolling
+      if (visibleCards.length === 0) {
+        column.style.display = 'none';
+        console.log(`Hiding empty column: ${column.querySelector('.kanban-label')?.textContent || 'Unknown'}`);
+      } else {
+        column.style.display = '';
+      }
+    });
+  }
+
   function createKanbanCard(issue, currentColumnLabel = null) {
     // Get issue title and link - try multiple selectors in order of preference
     let titleElement = null;
@@ -2489,8 +3104,19 @@
                 "Unknown Issue";
         link = titleElement.getAttribute("href") || "#";
         
-        // Clean up title text
+        // Clean up title text and remove repeated issue numbers
         title = title.replace(/\s+/g, ' ').trim();
+        
+        // Remove repeated issue numbers pattern (e.g., "#171 #171 #171..." becomes "#171")
+        // First, find all issue number patterns and deduplicate them
+        const issueNumberMatches = title.match(/#\d+/g);
+        if (issueNumberMatches && issueNumberMatches.length > 1) {
+          // Remove all issue numbers first
+          let cleanTitle = title.replace(/#\d+\s*/g, '').trim();
+          // Add back only the first unique issue number
+          const uniqueIssueNumber = issueNumberMatches[0];
+          title = `${uniqueIssueNumber} ${cleanTitle}`.trim();
+        }
         
         if (title && title !== "" && title !== "Unknown Issue") {
           break;
@@ -2502,10 +3128,34 @@
     if (title === "Unknown Issue") {
       const textContent = issue.textContent.trim();
       if (textContent) {
-        // Extract first meaningful line as title
+        // Extract first meaningful line as title, but clean up repeated issue numbers
         const lines = textContent.split('\n').map(line => line.trim()).filter(line => line.length > 5);
         if (lines.length > 0) {
-          title = lines[0].substring(0, 100); // Limit to 100 chars
+          let cleanTitle = lines[0].substring(0, 100); // Limit to 100 chars
+          
+          // Remove repeated issue numbers (like "#171 #171 #171...")
+          const issueNumberMatches = cleanTitle.match(/#\d+/g);
+          if (issueNumberMatches && issueNumberMatches.length > 1) {
+            // Remove all issue numbers first
+            let tempTitle = cleanTitle.replace(/#\d+\s*/g, '').trim();
+            // Add back only the first unique issue number
+            const uniqueIssueNumber = issueNumberMatches[0];
+            cleanTitle = `${uniqueIssueNumber} ${tempTitle}`.trim();
+          }
+          
+          // If the cleaned title is mostly just issue numbers, try the next line
+          if (cleanTitle.match(/^(#\d+\s*)+/) && lines.length > 1) {
+            cleanTitle = lines[1].substring(0, 100);
+            // Apply same cleaning to the second line
+            const issueNumberMatches2 = cleanTitle.match(/#\d+/g);
+            if (issueNumberMatches2 && issueNumberMatches2.length > 1) {
+              let tempTitle = cleanTitle.replace(/#\d+\s*/g, '').trim();
+              const uniqueIssueNumber = issueNumberMatches2[0];
+              cleanTitle = `${uniqueIssueNumber} ${tempTitle}`.trim();
+            }
+          }
+          
+          title = cleanTitle;
         }
       }
       
@@ -2523,18 +3173,25 @@
     
     // Extract issue number from the link, title, or issue element
     let issueNumber = "";
-    if (link) {
-      const issueMatch = link.match(/\/issues\/(\d+)/);
-      if (issueMatch) {
-        issueNumber = `#${issueMatch[1]} `;
-      }
-    }
     
-    // Try to get issue number from the issue element itself
-    if (!issueNumber) {
-      const issueNumberElement = issue.querySelector(".issue-number");
-      if (issueNumberElement) {
-        issueNumber = issueNumberElement.textContent.trim() + " ";
+    // Check if title already starts with an issue number
+    const titleStartsWithNumber = title.match(/^#\d+\s/);
+    
+    if (!titleStartsWithNumber) {
+      // Only add issue number if title doesn't already have one
+      if (link) {
+        const issueMatch = link.match(/\/issues\/(\d+)/);
+        if (issueMatch) {
+          issueNumber = `#${issueMatch[1]} `;
+        }
+      }
+      
+      // Try to get issue number from the issue element itself
+      if (!issueNumber) {
+        const issueNumberElement = issue.querySelector(".issue-number");
+        if (issueNumberElement) {
+          issueNumber = issueNumberElement.textContent.trim() + " ";
+        }
       }
     }
     
@@ -2577,6 +3234,18 @@
       return null;
     }).filter(Boolean);
     
+    // Get issue status for badge
+    const status = getIssueStatus(issue);
+    const statusConfig = {
+      'unstarted': { text: 'U', color: '#6b7280', title: 'Unstarted' },
+      'ongoing': { text: 'O', color: '#3b82f6', title: 'Ongoing' },
+      'completed': { text: 'C', color: '#10b981', title: 'Completed' }
+    };
+    const statusInfo = statusConfig[status];
+    
+    // Debug logging to help identify status detection issues
+    const issueTitle = title.substring(0, 50);
+    
     return `
       <div class="issuable-row kanban-card" data-issue-url="${link}">
         <div class="kanban-card-title">
@@ -2590,6 +3259,9 @@
         ` : ""}
         <div class="kanban-card-labels">
           ${labelElements.join("")}
+        </div>
+        <div class="kanban-status-badge" style="background-color: ${statusInfo.color};" title="${statusInfo.title}">
+          ${statusInfo.text}
         </div>
       </div>
     `;
@@ -2633,6 +3305,8 @@
 
   // Filtered versions for Kanban that respect existing filter logic
   function getFilteredIssuesForKanbanLabel(labelName, allIssues) {
+    console.log(`Filtering issues for label "${labelName}". Current filters:`, currentFilters);
+    
     return Array.from(allIssues).filter(issue => {
       // Ensure we're working with actual issue rows
       if (!issue.classList.contains('issuable-row')) {
@@ -2759,71 +3433,174 @@
     
     // Apply title search
     if (currentFilters.titleSearch && currentFilters.titleSearch.trim() !== "") {
+      // Try multiple selectors to find the title
+      let title = "";
+      
+      // Strategy 1: Try to get title from title attribute
       const titleElement = issue.querySelector("span > a[title]");
-      const title = titleElement ? titleElement.getAttribute("title").toLowerCase() : "";
+      if (titleElement) {
+        title = titleElement.getAttribute("title").toLowerCase();
+      }
+      
+      // Strategy 2: If no title found, try text content of links
+      if (!title) {
+        const linkElement = issue.querySelector("a");
+        if (linkElement) {
+          title = linkElement.textContent.toLowerCase();
+        }
+      }
+      
+      // Strategy 3: If still no title, try any text in the issue
+      if (!title) {
+        title = issue.textContent.toLowerCase();
+      }
+      
       const searchTerms = currentFilters.titleSearch.toLowerCase().split(/\s+/).filter(term => term.length > 0);
       const hasAllTerms = searchTerms.every(term => title.includes(term));
-      if (!hasAllTerms) return false;
+      if (!hasAllTerms) {
+        console.log(`Search filter rejected issue. Search terms: [${searchTerms.join(', ')}], Title: "${title}"`);
+        return false;
+      }
     }
     
     return true;
   }
 
   function showKanbanConfiguration(allLabels) {
-    const existingConfig = loadKanbanConfig();
+    const profiles = loadKanbanProfiles();
+    const activeProfileId = loadActiveKanbanProfile();
     
     const modal = document.createElement("div");
     modal.className = "kanban-config-modal";
     modal.innerHTML = `
       <div class="kanban-config-content">
-        <h3>Configure Kanban Board</h3>
-        <p>Select and order the labels for your Kanban columns:</p>
-        <div class="kanban-config-labels">
-          <div class="available-labels">
-            <h4>Available Labels</h4>
-            <div class="label-list">
-              ${allLabels.map(label => `
-                <div class="config-label-item ${existingConfig.includes(label.name) ? 'selected' : ''}" 
-                     data-label="${label.name}">
-                  <span class="label-badge" style="background-color: ${label.color}; color: ${label.isLightText ? '#ffffff' : '#000000'};">
-                    ${label.text}
-                  </span>
-                  <span class="label-count">(${label.count})</span>
+        <div class="kanban-config-header">
+          <h3>Configure Kanban Profiles</h3>
+          <p>Create and manage different Kanban board configurations:</p>
+        </div>
+        
+        <div class="kanban-profile-management">
+          <div class="profile-selector">
+            <h4>Kanban Profiles</h4>
+            <div class="profile-list">
+              ${Object.values(profiles).map(profile => `
+                <div class="profile-item ${profile.id === activeProfileId ? 'active' : ''}" 
+                     data-profile-id="${profile.id}">
+                  <span class="profile-title">${profile.title}</span>
+                  <div class="profile-actions">
+                    <button class="btn-edit-profile" title="Edit Profile">✏️</button>
+                    <button class="btn-delete-profile" title="Delete Profile">🗑️</button>
+                  </div>
                 </div>
               `).join('')}
             </div>
+            <button class="btn btn-default btn-sm add-profile-btn" id="add-profile-btn">+ Add New Profile</button>
           </div>
-          <div class="selected-labels">
-            <h4>Kanban Columns (drag to reorder)</h4>
-            <div class="selected-label-list" id="selected-labels">
-              ${existingConfig.map(labelName => {
-                const label = allLabels.find(l => l.name === labelName);
-                return label ? `
-                  <div class="selected-label-item" data-label="${label.name}">
-                    <span class="label-badge" style="background-color: ${label.color}; color: ${label.isLightText ? '#ffffff' : '#000000'};">
-                      ${label.text}
-                    </span>
-                    <button class="remove-label">×</button>
+          
+          <div class="profile-editor">
+            <div class="profile-form" style="display: none;">
+              <h4 id="profile-form-title">New Profile</h4>
+              <input type="text" id="profile-title-input" placeholder="Profile Title (e.g., 'Development Areas')" class="form-input">
+              <div class="kanban-config-labels">
+                <div class="available-labels">
+                  <h4>Available Labels</h4>
+                  <div class="label-list" id="available-labels-list">
+                    ${allLabels.map(label => `
+                      <div class="config-label-item" data-label="${label.name}">
+                        <span class="label-badge" style="background-color: ${label.color}; color: ${label.isLightText ? '#ffffff' : '#000000'};">
+                          ${label.text}
+                        </span>
+                        <span class="label-count">(${label.count})</span>
+                      </div>
+                    `).join('')}
                   </div>
-                ` : '';
-              }).join('')}
+                </div>
+                <div class="selected-labels">
+                  <h4>Kanban Columns (drag to reorder)</h4>
+                  <div class="selected-label-list" id="selected-labels">
+                    <!-- Labels will be populated when editing a profile -->
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+        
+        <!-- Profile form actions in dedicated grid area -->
+        <div class="profile-form-actions" style="display: none;">
+          <button class="btn btn-success save-profile-btn">Save Profile</button>
+          <button class="btn btn-outline cancel-profile-btn">Cancel</button>
+        </div>
+        
+        <!-- Main modal actions in dedicated grid area -->
         <div class="kanban-config-actions">
-          <button class="btn btn-success save-kanban-config">Save Configuration</button>
-          <button class="btn btn-outline cancel-kanban-config">Cancel</button>
+          <button class="btn btn-outline close-config">Close</button>
         </div>
       </div>
     `;
     
     document.body.appendChild(modal);
-    setupKanbanConfigHandlers(modal, allLabels);
+    setupKanbanProfileHandlers(modal, allLabels);
+    updateAddProfileButtonState(modal);
   }
 
-  function setupKanbanConfigHandlers(modal, allLabels) {
-    // Add label selection handlers
+  function updateAddProfileButtonState(modal) {
+    const profiles = loadKanbanProfiles();
+    const addButton = modal.querySelector("#add-profile-btn");
+    
+    if (Object.keys(profiles).length >= 5) {
+      addButton.disabled = true;
+      addButton.textContent = "Max 5 Profiles";
+      addButton.style.opacity = "0.6";
+      addButton.style.cursor = "not-allowed";
+    } else {
+      addButton.disabled = false;
+      addButton.textContent = "+ Add New Profile";
+      addButton.style.opacity = "1";
+      addButton.style.cursor = "pointer";
+    }
+  }
+
+  function setupKanbanProfileHandlers(modal, allLabels) {
+    let currentEditingProfileId = null;
+    
     modal.addEventListener("click", (e) => {
+      // Profile management handlers
+      if (e.target.classList.contains("add-profile-btn")) {
+        const profiles = loadKanbanProfiles();
+        if (Object.keys(profiles).length >= 5) {
+          alert("Maximum of 5 profiles allowed per milestone. Please delete an existing profile first.");
+          return;
+        }
+        showProfileForm(modal, allLabels);
+        currentEditingProfileId = null;
+      }
+      
+      if (e.target.classList.contains("btn-edit-profile")) {
+        const profileItem = e.target.closest(".profile-item");
+        const profileId = profileItem.dataset.profileId;
+        editProfile(modal, allLabels, profileId);
+        currentEditingProfileId = profileId;
+      }
+      
+      if (e.target.classList.contains("btn-delete-profile")) {
+        const profileItem = e.target.closest(".profile-item");
+        const profileId = profileItem.dataset.profileId;
+        deleteProfile(profileId);
+        modal.remove();
+        showKanbanConfiguration(allLabels); // Refresh modal with updated button state
+      }
+      
+      // Profile form handlers
+      if (e.target.classList.contains("save-profile-btn")) {
+        saveProfileFromForm(modal, currentEditingProfileId);
+      }
+      
+      if (e.target.classList.contains("cancel-profile-btn")) {
+        hideProfileForm(modal);
+      }
+      
+      // Label selection handlers (within profile form)
       if (e.target.closest(".config-label-item") && !e.target.closest(".config-label-item.selected")) {
         const labelItem = e.target.closest(".config-label-item");
         const labelName = labelItem.getAttribute("data-label");
@@ -2837,14 +3614,145 @@
         removeLabelFromSelection(labelName, modal);
       }
       
-      if (e.target.classList.contains("save-kanban-config")) {
-        saveKanbanConfiguration(modal);
-      }
-      
-      if (e.target.classList.contains("cancel-kanban-config")) {
+      // Close modal
+      if (e.target.classList.contains("close-config")) {
         modal.remove();
       }
     });
+  }
+
+  function showProfileForm(modal, allLabels) {
+    const profileForm = modal.querySelector(".profile-form");
+    const profileFormActions = modal.querySelector(".profile-form-actions");
+    const titleInput = modal.querySelector("#profile-title-input");
+    const formTitle = modal.querySelector("#profile-form-title");
+    
+    formTitle.textContent = "New Profile";
+    titleInput.value = "";
+    clearSelectedLabels(modal);
+    resetAvailableLabels(modal);
+    profileForm.style.display = "block";
+    profileFormActions.style.display = "flex";
+  }
+  
+  function hideProfileForm(modal) {
+    const profileForm = modal.querySelector(".profile-form");
+    const profileFormActions = modal.querySelector(".profile-form-actions");
+    profileForm.style.display = "none";
+    profileFormActions.style.display = "none";
+  }
+  
+  function editProfile(modal, allLabels, profileId) {
+    const profiles = loadKanbanProfiles();
+    const profile = profiles[profileId];
+    if (!profile) return;
+    
+    const profileForm = modal.querySelector(".profile-form");
+    const profileFormActions = modal.querySelector(".profile-form-actions");
+    const titleInput = modal.querySelector("#profile-title-input");
+    const formTitle = modal.querySelector("#profile-form-title");
+    
+    formTitle.textContent = `Edit Profile: ${profile.title}`;
+    titleInput.value = profile.title;
+    
+    // Clear and populate selected labels
+    clearSelectedLabels(modal);
+    resetAvailableLabels(modal);
+    
+    if (profile.labels) {
+      profile.labels.forEach(labelName => {
+        addLabelToSelection(labelName, allLabels, modal);
+        // Mark as selected in available labels
+        const availableItem = modal.querySelector(`[data-label="${labelName}"]`);
+        if (availableItem) {
+          availableItem.classList.add("selected");
+        }
+      });
+    }
+    
+    profileForm.style.display = "block";
+    profileFormActions.style.display = "flex";
+  }
+  
+  function deleteProfile(profileId) {
+    const profiles = loadKanbanProfiles();
+    const activeProfileId = loadActiveKanbanProfile();
+    
+    if (profiles[profileId]) {
+      delete profiles[profileId];
+      saveKanbanProfiles(profiles);
+      
+      // If we deleted the active profile, switch to another one
+      if (activeProfileId === profileId) {
+        const remainingProfiles = Object.keys(profiles);
+        if (remainingProfiles.length > 0) {
+          saveActiveKanbanProfile(remainingProfiles[0]);
+        } else {
+          saveActiveKanbanProfile(null);
+        }
+        
+        // Refresh Kanban board
+        const kanbanBoard = document.getElementById("kanban-board");
+        if (kanbanBoard) {
+          renderKanbanBoard(kanbanBoard);
+        }
+      }
+    }
+  }
+  
+  function saveProfileFromForm(modal, editingProfileId = null) {
+    const titleInput = modal.querySelector("#profile-title-input");
+    const title = titleInput.value.trim();
+    
+    if (!title) {
+      alert("Please enter a profile title");
+      return;
+    }
+    
+    const selectedLabels = getSelectedLabelsFromForm(modal);
+    
+    const profiles = loadKanbanProfiles();
+    const profileId = editingProfileId || generateProfileId();
+    
+    profiles[profileId] = {
+      id: profileId,
+      title: title,
+      labels: selectedLabels
+    };
+    
+    saveKanbanProfiles(profiles);
+    
+    // If this is the first profile or we're creating a new one, make it active
+    if (!editingProfileId || Object.keys(profiles).length === 1) {
+      saveActiveKanbanProfile(profileId);
+    }
+    
+    // Refresh Kanban board and close modal
+    const kanbanBoard = document.getElementById("kanban-board");
+    if (kanbanBoard) {
+      renderKanbanBoard(kanbanBoard);
+    }
+    
+    modal.remove();
+  }
+  
+  function generateProfileId() {
+    return 'profile_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+  
+  function getSelectedLabelsFromForm(modal) {
+    const selectedItems = modal.querySelectorAll(".selected-label-item");
+    return Array.from(selectedItems).map(item => item.dataset.label);
+  }
+  
+  function clearSelectedLabels(modal) {
+    const selectedList = modal.querySelector("#selected-labels");
+    selectedList.innerHTML = "";
+  }
+  
+  function resetAvailableLabels(modal) {
+    const availableItems = modal.querySelectorAll(".config-label-item");
+    availableItems.forEach(item => item.classList.remove("selected"));
   }
 
   function addLabelToSelection(labelName, allLabels, modal) {
@@ -2955,14 +3863,24 @@
     return luminance > 0.5 ? '#000000' : '#ffffff';
   }
 
-  // Initialize view mode on load
-  setTimeout(() => {
+  function initializeViewMode() {
+    console.log("GitLab Milestone Compass: Initializing view mode");
+    
+    // Ensure clean state - hide both views first
+    hideKanbanBoard();
+    hideStatusSections();
+    
     const currentMode = loadViewMode();
-    console.log("GitLab Milestone Compass: Initializing with view mode:", currentMode);
+    console.log("GitLab Milestone Compass: Current view mode:", currentMode);
+    
     if (currentMode === "kanban") {
       console.log("GitLab Milestone Compass: Showing Kanban view");
       showKanbanView();
+    } else {
+      console.log("GitLab Milestone Compass: Showing Status view");
+      showStatusView();
     }
+    
     updateViewToggleButton();
-  }, 100);
+  }
 })();
