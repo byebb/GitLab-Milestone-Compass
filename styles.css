@@ -1,5 +1,14 @@
 /* GitLab Milestone Assignee Filter Styles */
 
+/* Force scrollbar to always be visible to prevent page jumping */
+html {
+    overflow-y: scroll !important;
+}
+
+body {
+    overflow-y: scroll !important;
+}
+
 .milestone-assignee-filter {
     margin-top: 5px;
     background: #28272d;
@@ -505,6 +514,866 @@
     background: #404040;
     border-color: #666666;
     color: #ffffff;
+}
+
+/* Kanban Board Styles - Using GitLab theme consistency */
+.kanban-board {
+    margin: 20px 0;
+    padding: 0;
+    background: transparent;
+}
+
+.kanban-header.gl-card {
+    margin-bottom: 20px;
+}
+
+.kanban-header .gl-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Kanban Profile Chips */
+.kanban-profile-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    flex: 1;
+    justify-content: center;
+}
+
+.kanban-profile-chip {
+    background: var(--gray-700, #525252);
+    border: 1px solid var(--gray-600, #666666);
+    color: var(--gray-100, #f5f5f5);
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.kanban-profile-chip:hover {
+    background: var(--gray-600, #666666);
+    border-color: var(--blue-400, #6bb6ff);
+    box-shadow: 0 1px 3px rgba(107, 182, 255, 0.25);
+}
+
+.kanban-profile-chip.active {
+    background: var(--blue-600, #357abd);
+    border-color: var(--blue-500, #428bca);
+    color: var(--white, #ffffff);
+    box-shadow: 0 1px 3px rgba(53, 122, 189, 0.4);
+}
+
+.kanban-profile-chip.active:hover {
+    background: var(--blue-500, #428bca);
+    border-color: var(--blue-400, #6bb6ff);
+}
+
+/* Kanban header controls styling */
+.kanban-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Hide closed toggle styling */
+.hide-closed-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--gl-text-color, #e0e0e0);
+    cursor: pointer;
+    margin: 0;
+    user-select: none;
+}
+
+.hide-closed-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--blue-500, #3b82f6);
+}
+
+.hide-closed-toggle .toggle-label {
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Kanban Status Legend */
+.kanban-status-legend {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    font-size: 11px;
+    color: var(--gl-text-color-secondary, #a0a0a0);
+    margin: 0 12px;
+}
+
+.kanban-status-legend .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.kanban-status-legend .legend-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: 600;
+    color: white;
+    text-align: center;
+    line-height: 1;
+}
+
+.kanban-status-legend .legend-badge.unstarted {
+    background-color: #6b7280; /* Gray for unstarted */
+}
+
+.kanban-status-legend .legend-badge.ongoing {
+    background-color: #3b82f6; /* Blue for ongoing */
+}
+
+.kanban-status-legend .legend-badge.completed {
+    background-color: #10b981; /* Green for completed */
+}
+
+.kanban-status-legend .legend-text {
+    font-size: 10px;
+    font-weight: 400;
+}
+
+.kanban-header .gl-card-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.kanban-columns-container {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    /* Move scrollbar to top */
+    transform: rotateX(180deg);
+}
+
+.kanban-columns-container > * {
+    /* Rotate children back to normal orientation */
+    transform: rotateX(180deg);
+}
+
+.kanban-column.gl-card {
+    min-width: 250px;
+    max-width: 250px;
+    flex-shrink: 0;
+    /* Smooth transitions to reduce flickering */
+    transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+}
+
+.kanban-column-header.gl-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+}
+
+.kanban-column-content.gl-card-body {
+    padding: 8px;
+    /* min-height: 200px; */
+    /* max-height: 600px; */
+    overflow-y: auto;
+}
+
+/* Column header labels use GitLab's gl-label styling */
+.kanban-column-header .gl-label-text {
+    padding: 4px 8px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+.kanban-count {
+    font-size: 11px;
+    color: var(--gl-text-color-secondary, #666666);
+    font-weight: 500;
+}
+
+
+
+/* Use GitLab's issuable-row styling for Kanban cards */
+.kanban-card.issuable-row {
+    background: var(--white, #ffffff);
+    border: 1px solid var(--border-color, #585858);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.15s ease-in-out;
+    position: relative;
+}
+
+.kanban-card.issuable-row:hover {
+    border-color: var(--blue-200, #9dc7f1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.kanban-card.issuable-row:last-child {
+    margin-bottom: 0;
+}
+
+.kanban-card-title {
+    margin-bottom: 8px;
+    font-size: 11px;
+    line-height: 1.25;
+}
+
+.kanban-card-title a {
+    color: #eeeeee;
+    text-decoration: none;
+    font-weight: 500;
+    display: block;
+}
+
+.kanban-card-title a:hover {
+    color: var(--blue-700, #ffffff);
+    text-decoration: underline;
+}
+
+.kanban-card-assignee {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: var(--gl-text-color-secondary, #666666);
+}
+
+.kanban-card-assignee .assignee-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color, #dbdbdb);
+}
+
+.kanban-card-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+/* Use GitLab's actual label styling with dynamic contrast */
+.kanban-card-labels .gl-label-text.kanban-label-clone {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 100px;
+    font-weight: 500;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+}
+
+/* Kanban Status Badge */
+.kanban-status-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+    cursor: help;
+    z-index: 10;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Cross-column duplicate issue highlighting */
+.kanban-card.duplicate-highlighted {
+    border: 2px solid var(--blue-500, #3b82f6) !important;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.4) !important;
+    background: rgba(59, 130, 246, 0.05) !important;
+    transform: scale(1.02);
+    z-index: 5;
+}
+
+/* Dynamic contrast colors are applied via inline styles by JavaScript */
+
+/* Bright Button Text Contrast Fix */
+.btn.bright-background,
+.label-badge.bright-background,
+.kanban-label.bright-background {
+    color: #000000 !important;
+}
+
+.btn.dark-background,
+.label-badge.dark-background,
+.kanban-label.dark-background {
+    color: #ffffff !important;
+}
+
+.kanban-more-labels {
+    font-size: 9px;
+    padding: 2px 6px;
+    background: var(--gray-100, #f0f0f0);
+    color: var(--gl-text-color-secondary, #666666);
+    border-radius: 100px;
+    font-weight: 500;
+}
+
+/* Kanban Empty State */
+.kanban-empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: var(--white, #ffffff);
+    border: 1px solid var(--border-color, #dbdbdb);
+    border-radius: 4px;
+    margin-top: 16px;
+}
+
+.kanban-empty-content h4 {
+    margin: 0 0 12px 0;
+    color: var(--gl-text-color, #303030);
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.kanban-empty-content p {
+    margin: 0 0 24px 0;
+    color: var(--gl-text-color-secondary, #999999);
+    font-size: 14px;
+}
+
+/* Kanban Configuration Modal - Dark Mode */
+.kanban-config-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.kanban-config-content {
+    background: var(--gray-900, #2d2d2d);
+    border: 1px solid var(--gray-700, #525252);
+    border-radius: 8px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    color: var(--gray-100, #f5f5f5);
+    position: relative;
+    display: grid;
+    grid-template-rows: auto 1fr auto auto; /* Header, Content, Profile buttons, Main buttons */
+    grid-template-areas: 
+        "header"
+        "content" 
+        "profile-actions"
+        "main-actions";
+    gap: 16px;
+    padding: 24px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.kanban-config-header {
+    grid-area: header;
+}
+
+.kanban-config-content h3 {
+    margin: 0 0 8px 0;
+    color: var(--gray-100, #f5f5f5);
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.kanban-config-content p {
+    margin: 0 0 20px 0;
+    color: var(--gray-300, #d0d0d0);
+    font-size: 14px;
+}
+
+.kanban-config-labels {
+    display: flex;
+    gap: 16px;
+    flex: 1;
+    margin-bottom: 16px;
+}
+
+.available-labels,
+.selected-labels {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.available-labels h4,
+.selected-labels h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gray-100, #f5f5f5);
+}
+
+.label-list,
+.selected-label-list {
+    border: 1px solid var(--gray-600, #666666);
+    border-radius: 4px;
+    padding: 12px;
+    flex: 1;
+    min-height: 250px;
+    max-height: 350px;
+    overflow-y: auto;
+    background: var(--gray-800, #3d3d3d);
+}
+
+.config-label-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    background: var(--gray-700, #525252);
+    border: 1px solid var(--gray-600, #666666);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.config-label-item:hover {
+    border-color: var(--blue-400, #6bb6ff);
+    background: var(--gray-600, #666666);
+    box-shadow: 0 1px 3px rgba(107, 182, 255, 0.25);
+}
+
+.config-label-item.selected {
+    border-color: var(--blue-500, #428bca);
+    background: var(--blue-900, #1e3a5f);
+    cursor: default;
+}
+
+.config-label-item:last-child {
+    margin-bottom: 0;
+}
+
+.selected-label-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    background: var(--gray-700, #525252);
+    border: 1px solid var(--blue-500, #428bca);
+    border-radius: 4px;
+    cursor: grab;
+    transition: background-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+}
+
+.selected-label-item:hover {
+    background: var(--gray-600, #666666);
+    transform: translateY(-1px);
+}
+
+.selected-label-item:active {
+    cursor: grabbing;
+}
+
+.selected-label-item.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+/* Drag handle styling */
+.selected-label-item .drag-handle {
+    color: var(--gray-400, #a0a0a0);
+    font-size: 12px;
+    line-height: 1;
+    cursor: grab;
+    user-select: none;
+    padding: 2px;
+    margin-right: 4px;
+}
+
+.selected-label-item:active .drag-handle {
+    cursor: grabbing;
+}
+
+.label-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.label-count {
+    font-size: 11px;
+    color: var(--gray-400, #999999);
+    font-weight: 500;
+}
+
+.remove-label {
+    background: #ff6b6b;
+    color: #ffffff;
+    border: none;
+    border-radius: 2px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+    transition: background 0.2s ease;
+}
+
+.remove-label:hover {
+    background: #ff5252;
+}
+
+.kanban-config-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-600, #666666);
+    position: relative;
+    z-index: 100; /* High z-index for main modal close button */
+    grid-area: main-actions;
+}
+
+/* Kanban Configuration Action Buttons */
+.kanban-config-actions .btn {
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 4px;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px;
+}
+
+.kanban-config-actions .btn-success {
+    background: var(--green-500, #108548);
+    border-color: var(--green-600, #0f7a40);
+    color: #ffffff;
+}
+
+.kanban-config-actions .btn-success:hover {
+    background: var(--green-600, #0f7a40);
+    border-color: var(--green-700, #0d6837);
+    box-shadow: 0 2px 4px rgba(16, 133, 72, 0.25);
+}
+
+.kanban-config-actions .btn-success:active {
+    background: var(--green-700, #0d6837);
+    border-color: var(--green-800, #0b5d32);
+    transform: translateY(1px);
+}
+
+.kanban-config-actions .btn-outline {
+    background: var(--gray-700, #525252);
+    border-color: var(--gray-600, #666666);
+    color: var(--gray-100, #f5f5f5);
+}
+
+.kanban-config-actions .btn-outline:hover {
+    background: var(--gray-600, #666666);
+    border-color: var(--gray-500, #808080);
+    color: var(--gray-100, #f5f5f5);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.kanban-config-actions .btn-outline:active {
+    background: var(--gray-800, #3d3d3d);
+    border-color: var(--gray-700, #525252);
+    transform: translateY(1px);
+}
+
+.kanban-config-actions .btn:focus {
+    outline: 2px solid var(--blue-200, #9dc7f1);
+    outline-offset: 2px;
+}
+
+/* Kanban Profile Management */
+.kanban-profile-management {
+    display: flex;
+    gap: 20px;
+    height: 500px; /* Fixed height for better space utilization */
+    grid-area: content;
+    overflow: hidden;
+}
+
+.kanban-profile-management h3,
+.kanban-profile-management h4 {
+    color: black;
+}
+
+.profile-selector {
+    flex: 0 0 280px; /* Fixed width for profile list */
+    min-width: 280px;
+    display: flex;
+    flex-direction: column;
+}
+
+.profile-editor {
+    flex: 1; /* Take remaining space */
+    display: flex;
+    flex-direction: column;
+}
+
+.profile-list {
+    border: 1px solid var(--gray-600, #666666);
+    border-radius: 4px;
+    background: var(--gray-800, #3d3d3d);
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+}
+
+.profile-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--gray-700, #525252);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.profile-item:last-child {
+    border-bottom: none;
+}
+
+.profile-item:hover {
+    background: var(--gray-700, #525252);
+}
+
+.profile-item.active {
+    background: var(--blue-900, #1e3a5f);
+    border-color: var(--blue-500, #428bca);
+}
+
+.profile-title {
+    font-weight: 500;
+    color: var(--gray-100, #f5f5f5);
+}
+
+.profile-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-edit-profile,
+.btn-delete-profile {
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+.btn-edit-profile:hover {
+    background: var(--gray-600, #666666);
+}
+
+.btn-delete-profile:hover {
+    background: var(--red-600, #dc3545);
+}
+
+.add-profile-btn {
+    width: 100%;
+    justify-content: center;
+    background: var(--gray-700, #525252) !important;
+    border: 1px solid var(--gray-600, #666666) !important;
+    color: var(--gray-100, #f5f5f5) !important;
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.add-profile-btn:hover {
+    background: var(--gray-600, #666666) !important;
+    border-color: var(--gray-500, #808080) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Profile Form */
+.profile-form {
+    border: 1px solid var(--gray-600, #666666);
+    border-radius: 4px;
+    background: var(--gray-800, #3d3d3d);
+    padding: 16px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.form-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--gray-600, #666666);
+    border-radius: 4px;
+    background: var(--gray-700, #525252);
+    color: var(--gray-100, #f5f5f5);
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--blue-400, #6bb6ff);
+    box-shadow: 0 0 0 2px rgba(107, 182, 255, 0.25);
+}
+
+.form-input::placeholder {
+    color: var(--gray-400, #999999);
+}
+
+.profile-form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-600, #666666);
+    position: relative;
+    z-index: 1; /* Ensure it stays below modal close button */
+    grid-area: profile-actions;
+}
+
+/* Profile form actions are now controlled via JavaScript */
+
+/* Profile Form Buttons */
+.profile-form-actions .btn {
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 4px;
+    font-weight: 500;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.profile-form-actions .btn-success {
+    background: var(--green-600, #1f8a44);
+    border-color: var(--green-700, #0d6837);
+    color: var(--white, #ffffff);
+}
+
+.profile-form-actions .btn-success:hover {
+    background: var(--green-500, #27a356);
+    border-color: var(--green-600, #1f8a44);
+    box-shadow: 0 2px 4px rgba(31, 138, 68, 0.3);
+}
+
+.profile-form-actions .btn-outline {
+    background: var(--gray-700, #525252);
+    border-color: var(--gray-600, #666666);
+    color: var(--gray-100, #f5f5f5);
+}
+
+.profile-form-actions .btn-outline:hover {
+    background: var(--gray-600, #666666);
+    border-color: var(--gray-500, #808080);
+    color: var(--gray-100, #f5f5f5);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.save-profile-btn {
+    background: var(--green-600, #1f8a44) !important;
+    border-color: var(--green-700, #0d6837) !important;
+    color: var(--white, #ffffff) !important;
+}
+
+.save-profile-btn:hover {
+    background: var(--green-500, #27a356) !important;
+    border-color: var(--green-600, #1f8a44) !important;
+}
+
+.cancel-profile-btn {
+    background: var(--gray-700, #525252) !important;
+    border-color: var(--gray-600, #666666) !important;
+    color: var(--gray-100, #f5f5f5) !important;
+}
+
+.cancel-profile-btn:hover {
+    background: var(--gray-600, #666666) !important;
+    border-color: var(--gray-500, #808080) !important;
+}
+
+.kanban-config-actions .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Scrollbar styling for Kanban columns */
+.kanban-columns-container::-webkit-scrollbar,
+.kanban-column-content::-webkit-scrollbar,
+.label-list::-webkit-scrollbar,
+.selected-label-list::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+}
+
+.kanban-columns-container::-webkit-scrollbar-track,
+.kanban-column-content::-webkit-scrollbar-track,
+.label-list::-webkit-scrollbar-track,
+.selected-label-list::-webkit-scrollbar-track {
+    background: #f0f0f0;
+    border-radius: 3px;
+}
+
+.kanban-columns-container::-webkit-scrollbar-thumb,
+.kanban-column-content::-webkit-scrollbar-thumb,
+.label-list::-webkit-scrollbar-thumb,
+.selected-label-list::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border-radius: 3px;
+}
+
+.kanban-columns-container::-webkit-scrollbar-thumb:hover,
+.kanban-column-content::-webkit-scrollbar-thumb:hover,
+.label-list::-webkit-scrollbar-thumb:hover,
+.selected-label-list::-webkit-scrollbar-thumb:hover {
+    background: #a0a0a0;
 }
 
 /* Integration with GitLab styles */
