@@ -21,10 +21,32 @@
     }, 500);
   }
 
-  // LocalStorage functions for alternative assignee prefix
+  // LocalStorage functions for alternative assignee prefix (per repository)
+  function getRepositoryKey() {
+    // Extract repository URL from current location
+    const url = window.location.href;
+    
+    // Match GitLab repository URL pattern (handles both gitlab.com and custom instances)
+    const repoMatch = url.match(/^(https?:\/\/[^\/]+\/[^\/]+\/[^\/]+)/);
+    if (repoMatch) {
+      return repoMatch[1];
+    }
+    
+    // Fallback: use domain + first two path segments
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    if (pathParts.length >= 2) {
+      return `${urlObj.origin}/${pathParts[0]}/${pathParts[1]}`;
+    }
+    
+    return urlObj.origin;
+  }
+
   function saveAlternativeAssigneePrefix(prefix) {
     try {
-      localStorage.setItem("gitlab-milestone-alt-assignee-prefix", prefix);
+      const repoKey = getRepositoryKey();
+      const storageKey = `gitlab-alt-assignee-prefix-${btoa(repoKey).slice(0, 50)}`;
+      localStorage.setItem(storageKey, prefix);
     } catch (e) {
       // Could not save alternative assignee prefix
     }
@@ -32,11 +54,59 @@
 
   function loadAlternativeAssigneePrefix() {
     try {
-      const prefix = localStorage.getItem("gitlab-milestone-alt-assignee-prefix");
+      const repoKey = getRepositoryKey();
+      const storageKey = `gitlab-alt-assignee-prefix-${btoa(repoKey).slice(0, 50)}`;
+      const prefix = localStorage.getItem(storageKey);
       return prefix || "👤::";
     } catch (e) {
       // Could not load alternative assignee prefix
       return "👤::";
+    }
+  }
+
+  // LocalStorage functions for Kanban board configuration
+  function saveKanbanConfig(labels) {
+    try {
+      const key = getMilestoneKey() + "-kanban";
+      const config = {
+        labels: labels,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(key, JSON.stringify(config));
+    } catch (e) {
+      // Could not save Kanban configuration
+    }
+  }
+
+  function loadKanbanConfig() {
+    try {
+      const key = getMilestoneKey() + "-kanban";
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const config = JSON.parse(stored);
+        // Return stored config if recent (within 30 days)
+        const isRecent = config.timestamp && Date.now() - config.timestamp < 30 * 24 * 60 * 60 * 1000;
+        return isRecent ? config.labels : [];
+      }
+    } catch (e) {
+      // Could not load Kanban configuration
+    }
+    return [];
+  }
+
+  function saveViewMode(mode) {
+    try {
+      localStorage.setItem("gitlab-milestone-view-mode", mode);
+    } catch (e) {
+      // Could not save view mode
+    }
+  }
+
+  function loadViewMode() {
+    try {
+      return localStorage.getItem("gitlab-milestone-view-mode") || "status";
+    } catch (e) {
+      return "status";
     }
   }
 
@@ -504,6 +574,20 @@
       labelToggleButton.style.marginLeft = "4px";
       labelToggleButton.style.opacity = "0.7";
 
+      // Create Kanban view toggle button
+      const kanbanToggleButton = document.createElement("button");
+      kanbanToggleButton.className =
+        "btn btn-outline btn-md gl-button kanban-view-toggle";
+      kanbanToggleButton.innerHTML = `
+                <svg class="gl-button-icon gl-icon s16" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M2 2h3v12H2V2zm5 0h3v8H7V2zm5 0h3v5h-3V2z"/>
+                </svg>
+                <span class="gl-button-text">Kanban</span>
+            `;
+      kanbanToggleButton.title = "Toggle Kanban board view";
+      kanbanToggleButton.style.marginLeft = "4px";
+      kanbanToggleButton.style.opacity = "0.7";
+
       // Add click handlers
       assigneeToggleButton.addEventListener("click", () => {
         const assigneeSection = document.querySelector(
@@ -569,10 +653,16 @@
         }
       });
 
+      // Add Kanban toggle handler
+      kanbanToggleButton.addEventListener("click", () => {
+        toggleKanbanView();
+      });
+
       // Insert the buttons
       if (buttonContainer.classList.contains("btn-group")) {
         buttonContainer.appendChild(assigneeToggleButton);
         buttonContainer.appendChild(labelToggleButton);
+        buttonContainer.appendChild(kanbanToggleButton);
       } else {
         // Create a wrapper div to keep buttons together
         const btnWrapper = document.createElement("div");
@@ -581,6 +671,7 @@
         btnWrapper.style.gap = "4px";
         btnWrapper.appendChild(assigneeToggleButton);
         btnWrapper.appendChild(labelToggleButton);
+        btnWrapper.appendChild(kanbanToggleButton);
         buttonContainer.appendChild(btnWrapper);
       }
     }
@@ -1126,6 +1217,16 @@
     });
 
     updateSectionCounts();
+    
+    // Refresh Kanban board if it's currently displayed
+    refreshKanbanBoardIfVisible();
+  }
+
+  function refreshKanbanBoardIfVisible() {
+    const kanbanBoard = document.querySelector("#kanban-board");
+    if (kanbanBoard && kanbanBoard.style.display !== "none") {
+      renderKanbanBoard(kanbanBoard);
+    }
   }
 
   function updateAssigneeCounts(assignees) {
@@ -2127,4 +2228,741 @@
       updateSectionCounts();
     }, 10);
   }
+
+  // Kanban Board Functionality
+  function toggleKanbanView() {
+    const currentMode = loadViewMode();
+    const newMode = currentMode === "status" ? "kanban" : "status";
+    console.log("GitLab Milestone Compass: Toggling from", currentMode, "to", newMode);
+    saveViewMode(newMode);
+    
+    if (newMode === "kanban") {
+      console.log("GitLab Milestone Compass: Switching to Kanban view");
+      showKanbanView();
+    } else {
+      console.log("GitLab Milestone Compass: Switching to Status view");
+      showStatusView();
+    }
+    
+    updateViewToggleButton();
+  }
+
+  function updateViewToggleButton() {
+    const kanbanToggle = document.querySelector(".kanban-view-toggle");
+    const currentMode = loadViewMode();
+    
+    if (kanbanToggle) {
+      if (currentMode === "kanban") {
+        kanbanToggle.classList.remove("btn-outline");
+        kanbanToggle.classList.add("btn-default");
+        kanbanToggle.style.opacity = "1";
+      } else {
+        kanbanToggle.classList.remove("btn-default");
+        kanbanToggle.classList.add("btn-outline");
+        kanbanToggle.style.opacity = "0.7";
+      }
+    }
+  }
+
+  function showKanbanView() {
+    // Hide the default status-based sections
+    hideStatusSections();
+    
+    // Show or create the Kanban board
+    createKanbanBoard();
+  }
+
+  function showStatusView() {
+    // Hide the Kanban board
+    hideKanbanBoard();
+    
+    // Show the default status-based sections
+    showStatusSections();
+  }
+
+  function hideStatusSections() {
+    const sections = document.querySelectorAll("#issues-list-unassigned, #issues-list-ongoing, #issues-list-closed");
+    sections.forEach(section => {
+      const card = section.closest(".gl-card");
+      if (card) card.style.display = "none";
+    });
+  }
+
+  function showStatusSections() {
+    const sections = document.querySelectorAll("#issues-list-unassigned, #issues-list-ongoing, #issues-list-closed");
+    sections.forEach(section => {
+      const card = section.closest(".gl-card");
+      if (card) card.style.display = "block";
+    });
+  }
+
+  function hideKanbanBoard() {
+    const kanbanBoard = document.querySelector("#kanban-board");
+    if (kanbanBoard) {
+      kanbanBoard.style.display = "none";
+    }
+  }
+
+  function createKanbanBoard() {
+    let kanbanBoard = document.querySelector("#kanban-board");
+    
+    if (!kanbanBoard) {
+      kanbanBoard = document.createElement("div");
+      kanbanBoard.id = "kanban-board";
+      kanbanBoard.className = "kanban-board";
+      
+      // Insert after the filter container or at a fallback location
+      const filterContainer = document.querySelector(".milestone-assignee-filter");
+      if (filterContainer) {
+        filterContainer.parentNode.insertBefore(kanbanBoard, filterContainer.nextSibling);
+      } else {
+        // Fallback: insert before the first milestone content
+        const milestoneContent = document.querySelector(".milestone-content");
+        if (milestoneContent) {
+          milestoneContent.insertBefore(kanbanBoard, milestoneContent.firstChild);
+        } else {
+          document.body.appendChild(kanbanBoard);
+        }
+      }
+    }
+    
+    kanbanBoard.style.display = "block";
+    renderKanbanBoard(kanbanBoard);
+  }
+
+  function renderKanbanBoard(kanbanBoard) {
+    const config = loadKanbanConfig();
+    const allLabels = extractLabels();
+    
+    // If no config exists, show a message and configuration option
+    if (config.length === 0) {
+      kanbanBoard.innerHTML = `
+        <div class="gl-card kanban-header">
+          <div class="gl-card-header">
+            <h3 class="gl-card-title">Kanban Board</h3>
+            <button class="btn btn-sm btn-default configure-kanban-btn">Configure Columns</button>
+          </div>
+        </div>
+        <div class="kanban-empty-state">
+          <div class="kanban-empty-content">
+            <h4>Configure Your Kanban Board</h4>
+            <p>Select the labels you want to use as columns for your Kanban board.</p>
+            <button class="btn btn-default btn-md configure-kanban-action">Choose Labels</button>
+          </div>
+        </div>
+      `;
+      
+      // Add both configure button handlers
+      kanbanBoard.querySelector(".configure-kanban-btn").addEventListener("click", () => {
+        showKanbanConfiguration(allLabels);
+      });
+      kanbanBoard.querySelector(".configure-kanban-action").addEventListener("click", () => {
+        showKanbanConfiguration(allLabels);
+      });
+      return;
+    }
+    
+    kanbanBoard.innerHTML = `
+      <div class="gl-card kanban-header">
+        <div class="gl-card-header">
+          <h3 class="gl-card-title">Kanban Board</h3>
+          <button class="btn btn-sm btn-default configure-kanban-btn">Configure</button>
+        </div>
+      </div>
+      <div class="kanban-columns-container">
+        ${renderKanbanColumns(config, allLabels)}
+      </div>
+    `;
+    
+    // Add configure button handler
+    kanbanBoard.querySelector(".configure-kanban-btn").addEventListener("click", () => {
+      showKanbanConfiguration(allLabels);
+    });
+  }
+
+  function renderKanbanColumns(config, allLabels) {
+    const allIssues = document.querySelectorAll(".issuable-row");
+    let columns = "";
+    let usedIssues = new Set(); // Track issues already placed in columns
+    
+    // Create columns for configured labels (only if they have issues)
+    config.forEach(labelName => {
+      const label = allLabels.find(l => l.name === labelName);
+      if (label) {
+        const issues = getFilteredIssuesForKanbanLabel(labelName, allIssues);
+        // Only create column if it has issues
+        if (issues.length > 0) {
+          columns += createKanbanColumn(label, issues);
+          // Track these issues as used
+          issues.forEach(issue => {
+            const issueUrl = getIssueUrlFromElement(issue);
+            if (issueUrl) usedIssues.add(issueUrl);
+          });
+        }
+      }
+    });
+    
+    // Add MISC column for remaining issues (only issues NOT in other columns)
+    const miscIssues = getFilteredMiscIssuesForKanban(config, allIssues, usedIssues);
+    if (miscIssues.length > 0) {
+      columns += createMiscColumn(miscIssues);
+    }
+    
+    return columns;
+  }
+
+  function createKanbanColumn(label, issues) {
+    // Create label with dynamic contrast
+    const textColor = getContrastColor(label.color);
+    let labelHTML = `<span class="gl-label-text" style="background-color: ${label.color}; color: ${textColor};">${label.text}</span>`;
+    
+    // Search for actual label element in the DOM to get any additional styling
+    const allLabelElements = document.querySelectorAll('.gl-label .gl-label-text');
+    const sampleLabelElement = Array.from(allLabelElements).find(el => 
+      el.textContent.trim() === label.text
+    );
+    
+    // If we can find the actual element, clone it and apply dynamic contrast
+    if (sampleLabelElement) {
+      const clonedLabel = sampleLabelElement.cloneNode(true);
+      // Override the text color with our calculated contrast color
+      clonedLabel.style.color = textColor;
+      labelHTML = clonedLabel.outerHTML;
+    }
+    
+    return `
+      <div class="gl-card kanban-column" data-label="${label.name}">
+        <div class="gl-card-header kanban-column-header">
+          <span class="gl-label">
+            ${labelHTML}
+          </span>
+          <span class="kanban-count">(${issues.length})</span>
+        </div>
+        <div class="gl-card-body kanban-column-content">
+          ${issues.map(issue => createKanbanCard(issue, label.name)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function createMiscColumn(issues) {
+    return `
+      <div class="gl-card kanban-column misc-column">
+        <div class="gl-card-header kanban-column-header">
+          <span class="gl-label">
+            <span class="gl-label-text gl-label-text-dark" style="background-color: #999999;">
+              MISC
+            </span>
+          </span>
+          <span class="kanban-count">(${issues.length})</span>
+        </div>
+        <div class="gl-card-body kanban-column-content">
+          ${issues.map(issue => createKanbanCard(issue, "MISC")).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function createKanbanCard(issue, currentColumnLabel = null) {
+    // Get issue title and link - try multiple selectors in order of preference
+    let titleElement = null;
+    let title = "Unknown Issue";
+    let link = "#";
+    
+    // Try different selectors for GitLab issue title
+    const titleSelectors = [
+      "span > a[title]",           // Standard GitLab format
+      "a[title]",                  // Direct link with title
+      ".issue-title-text a",       // Issue title wrapper
+      ".issuable-title a",         // Alternative title class
+      "a[href*='/issues/']",       // Any link to an issue
+      ".gl-link[href*='/issues/']" // GitLab link class
+    ];
+    
+    for (const selector of titleSelectors) {
+      titleElement = issue.querySelector(selector);
+      if (titleElement) {
+        // Try to get title from multiple sources
+        title = titleElement.getAttribute("title") || 
+                titleElement.textContent.trim() || 
+                titleElement.getAttribute("aria-label") ||
+                "Unknown Issue";
+        link = titleElement.getAttribute("href") || "#";
+        
+        // Clean up title text
+        title = title.replace(/\s+/g, ' ').trim();
+        
+        if (title && title !== "" && title !== "Unknown Issue") {
+          break;
+        }
+      }
+    }
+    
+    // If still no good title, try to extract from any text content in the issue
+    if (title === "Unknown Issue") {
+      const textContent = issue.textContent.trim();
+      if (textContent) {
+        // Extract first meaningful line as title
+        const lines = textContent.split('\n').map(line => line.trim()).filter(line => line.length > 5);
+        if (lines.length > 0) {
+          title = lines[0].substring(0, 100); // Limit to 100 chars
+        }
+      }
+      
+      // Debug logging to help identify the issue structure
+      console.log("GitLab Milestone Compass: Could not extract title from issue:", {
+        outerHTML: issue.outerHTML.substring(0, 200),
+        textContent: issue.textContent.substring(0, 100),
+        availableLinks: Array.from(issue.querySelectorAll('a')).map(a => ({
+          href: a.getAttribute('href'),
+          title: a.getAttribute('title'),
+          text: a.textContent.trim()
+        }))
+      });
+    }
+    
+    // Extract issue number from the link, title, or issue element
+    let issueNumber = "";
+    if (link) {
+      const issueMatch = link.match(/\/issues\/(\d+)/);
+      if (issueMatch) {
+        issueNumber = `#${issueMatch[1]} `;
+      }
+    }
+    
+    // Try to get issue number from the issue element itself
+    if (!issueNumber) {
+      const issueNumberElement = issue.querySelector(".issue-number");
+      if (issueNumberElement) {
+        issueNumber = issueNumberElement.textContent.trim() + " ";
+      }
+    }
+    
+    // Get ONLY real GitLab assignees (NEVER alternative assignees)
+    const assigneeIcon = issue.querySelector('.assignee-icon a[title*="Assigned to"]');
+    const assigneeName = assigneeIcon ? assigneeIcon.getAttribute("title").replace("Assigned to ", "") : null;
+    const assigneeAvatar = assigneeIcon ? assigneeIcon.querySelector("img")?.getAttribute("src") : null;
+    
+    // Get labels with their actual styling
+    const altAssigneePrefix = loadAlternativeAssigneePrefix();
+    const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+    const labelElements = Array.from(labelLinks).map(link => {
+      const span = link.querySelector(".gl-label-text");
+      if (span) {
+        const labelText = span.textContent.trim();
+        
+        // INCLUDE alternative assignee labels (show them in cards)
+        // EXCLUDE the current column's label (redundant since it's already the column)
+        const isAltAssigneeLabel = labelText.startsWith(altAssigneePrefix);
+        const isCurrentColumnLabel = currentColumnLabel && labelText === currentColumnLabel;
+        
+        // Show alternative assignee labels, but skip the current column's label
+        if (isCurrentColumnLabel && !isAltAssigneeLabel) {
+          return null; // Skip column label unless it's an alt assignee
+        }
+        
+        // Clone the actual label element and apply dynamic contrast
+        const clonedSpan = span.cloneNode(true);
+        clonedSpan.className = "gl-label-text gl-label-text-scoped kanban-label-clone";
+        
+        // Apply dynamic text color based on background contrast
+        const bgColor = getComputedStyle(span).backgroundColor || span.style.backgroundColor;
+        if (bgColor) {
+          const textColor = getContrastColor(bgColor);
+          clonedSpan.style.color = textColor;
+        }
+        
+        return clonedSpan.outerHTML;
+      }
+      return null;
+    }).filter(Boolean);
+    
+    return `
+      <div class="issuable-row kanban-card" data-issue-url="${link}">
+        <div class="kanban-card-title">
+          <a href="${link}">${issueNumber}${title}</a>
+        </div>
+        ${assigneeName ? `
+          <div class="kanban-card-assignee">
+            <img src="${assigneeAvatar}" alt="${assigneeName}" class="assignee-icon">
+            <span>${assigneeName}</span>
+          </div>
+        ` : ""}
+        <div class="kanban-card-labels">
+          ${labelElements.join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function getIssuesForLabel(labelName, allIssues) {
+    return Array.from(allIssues).filter(issue => {
+      const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+      return Array.from(labelLinks).some(link => {
+        const href = link.getAttribute("href");
+        if (href) {
+          const urlMatch = href.match(/label_name=([^&]+)/);
+          if (urlMatch) {
+            const decodedLabel = decodeURIComponent(urlMatch[1]);
+            return decodedLabel === labelName;
+          }
+        }
+        return false;
+      });
+    });
+  }
+
+  function getMiscIssues(configuredLabels, allIssues) {
+    return Array.from(allIssues).filter(issue => {
+      const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+      const issueLabels = Array.from(labelLinks).map(link => {
+        const href = link.getAttribute("href");
+        if (href) {
+          const urlMatch = href.match(/label_name=([^&]+)/);
+          if (urlMatch) {
+            return decodeURIComponent(urlMatch[1]);
+          }
+        }
+        return null;
+      }).filter(Boolean);
+      
+      // Include issues that don't have any of the configured labels
+      return !configuredLabels.some(configLabel => issueLabels.includes(configLabel));
+    });
+  }
+
+  // Filtered versions for Kanban that respect existing filter logic
+  function getFilteredIssuesForKanbanLabel(labelName, allIssues) {
+    return Array.from(allIssues).filter(issue => {
+      // Ensure we're working with actual issue rows
+      if (!issue.classList.contains('issuable-row')) {
+        return false;
+      }
+      
+      // First check if issue has the target label
+      const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+      const hasTargetLabel = Array.from(labelLinks).some(link => {
+        const href = link.getAttribute("href");
+        if (href) {
+          const urlMatch = href.match(/label_name=([^&]+)/);
+          if (urlMatch) {
+            const decodedLabel = decodeURIComponent(urlMatch[1]);
+            return decodedLabel === labelName;
+          }
+        }
+        return false;
+      });
+      
+      if (!hasTargetLabel) return false;
+      
+      // Apply existing filter logic
+      return applyFiltersToIssue(issue);
+    });
+  }
+
+  function getIssueUrlFromElement(issue) {
+    // Extract unique identifier from issue element
+    const titleSelectors = [
+      "span > a[href*='/issues/']",
+      "a[href*='/issues/']",
+      ".gl-link[href*='/issues/']"
+    ];
+    
+    for (const selector of titleSelectors) {
+      const linkElement = issue.querySelector(selector);
+      if (linkElement) {
+        const href = linkElement.getAttribute("href");
+        if (href) {
+          // Extract issue number from URL for unique identification
+          const issueMatch = href.match(/\/issues\/(\d+)/);
+          if (issueMatch) {
+            return `/issues/${issueMatch[1]}`;
+          }
+        }
+      }
+    }
+    
+    // Fallback: use issue element's unique attributes
+    return issue.getAttribute("data-issue-url") || null;
+  }
+
+  function getFilteredMiscIssuesForKanban(configuredLabels, allIssues, usedIssues = new Set()) {
+    return Array.from(allIssues).filter(issue => {
+      // Ensure we're working with actual issue rows
+      if (!issue.classList.contains('issuable-row')) {
+        return false;
+      }
+      
+      // Skip if this issue is already used in another column
+      const issueUrl = getIssueUrlFromElement(issue);
+      if (issueUrl && usedIssues.has(issueUrl)) {
+        return false;
+      }
+      
+      // First check if issue doesn't have any configured labels
+      const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+      const issueLabels = Array.from(labelLinks).map(link => {
+        const href = link.getAttribute("href");
+        if (href) {
+          const urlMatch = href.match(/label_name=([^&]+)/);
+          if (urlMatch) {
+            return decodeURIComponent(urlMatch[1]);
+          }
+        }
+        return null;
+      }).filter(Boolean);
+      
+      const hasMiscCriteria = !configuredLabels.some(configLabel => issueLabels.includes(configLabel));
+      if (!hasMiscCriteria) return false;
+      
+      // Apply existing filter logic
+      return applyFiltersToIssue(issue);
+    });
+  }
+
+  function applyFiltersToIssue(issue) {
+    // Apply assignee filter (including alternative assignees)
+    if (currentFilters.assignee) {
+      const assigneeIcon = issue.querySelector('.assignee-icon a[title*="Assigned to"]');
+      const normalAssigneeMatches = assigneeIcon && assigneeIcon.getAttribute("title").includes(`Assigned to ${currentFilters.assignee}`);
+      
+      // Check for alternative assignee labels
+      const altAssigneePrefix = loadAlternativeAssigneePrefix();
+      const expectedAltLabel = `${altAssigneePrefix}${currentFilters.assignee}`;
+      const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+      const altAssigneeMatches = Array.from(labelLinks).some(link => {
+        const labelSpan = link.querySelector(".gl-label-text");
+        return labelSpan && labelSpan.textContent.trim() === expectedAltLabel;
+      });
+      
+      if (!normalAssigneeMatches && !altAssigneeMatches) return false;
+    }
+    
+    // Apply label filters (AND logic)
+    if (currentFilters.labels.length > 0) {
+      const hasAllLabels = currentFilters.labels.every(filterLabel => {
+        const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+        return Array.from(labelLinks).some(link => {
+          const href = link.getAttribute("href");
+          if (href) {
+            const urlMatch = href.match(/label_name=([^&]+)/);
+            if (urlMatch) {
+              const decodedLabel = decodeURIComponent(urlMatch[1]);
+              return decodedLabel === filterLabel;
+            }
+          }
+          return false;
+        });
+      });
+      if (!hasAllLabels) return false;
+    }
+    
+    // Apply title search
+    if (currentFilters.titleSearch && currentFilters.titleSearch.trim() !== "") {
+      const titleElement = issue.querySelector("span > a[title]");
+      const title = titleElement ? titleElement.getAttribute("title").toLowerCase() : "";
+      const searchTerms = currentFilters.titleSearch.toLowerCase().split(/\s+/).filter(term => term.length > 0);
+      const hasAllTerms = searchTerms.every(term => title.includes(term));
+      if (!hasAllTerms) return false;
+    }
+    
+    return true;
+  }
+
+  function showKanbanConfiguration(allLabels) {
+    const existingConfig = loadKanbanConfig();
+    
+    const modal = document.createElement("div");
+    modal.className = "kanban-config-modal";
+    modal.innerHTML = `
+      <div class="kanban-config-content">
+        <h3>Configure Kanban Board</h3>
+        <p>Select and order the labels for your Kanban columns:</p>
+        <div class="kanban-config-labels">
+          <div class="available-labels">
+            <h4>Available Labels</h4>
+            <div class="label-list">
+              ${allLabels.map(label => `
+                <div class="config-label-item ${existingConfig.includes(label.name) ? 'selected' : ''}" 
+                     data-label="${label.name}">
+                  <span class="label-badge" style="background-color: ${label.color}; color: ${label.isLightText ? '#ffffff' : '#000000'};">
+                    ${label.text}
+                  </span>
+                  <span class="label-count">(${label.count})</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="selected-labels">
+            <h4>Kanban Columns (drag to reorder)</h4>
+            <div class="selected-label-list" id="selected-labels">
+              ${existingConfig.map(labelName => {
+                const label = allLabels.find(l => l.name === labelName);
+                return label ? `
+                  <div class="selected-label-item" data-label="${label.name}">
+                    <span class="label-badge" style="background-color: ${label.color}; color: ${label.isLightText ? '#ffffff' : '#000000'};">
+                      ${label.text}
+                    </span>
+                    <button class="remove-label">×</button>
+                  </div>
+                ` : '';
+              }).join('')}
+            </div>
+          </div>
+        </div>
+        <div class="kanban-config-actions">
+          <button class="btn btn-success save-kanban-config">Save Configuration</button>
+          <button class="btn btn-outline cancel-kanban-config">Cancel</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    setupKanbanConfigHandlers(modal, allLabels);
+  }
+
+  function setupKanbanConfigHandlers(modal, allLabels) {
+    // Add label selection handlers
+    modal.addEventListener("click", (e) => {
+      if (e.target.closest(".config-label-item") && !e.target.closest(".config-label-item.selected")) {
+        const labelItem = e.target.closest(".config-label-item");
+        const labelName = labelItem.getAttribute("data-label");
+        addLabelToSelection(labelName, allLabels, modal);
+        labelItem.classList.add("selected");
+      }
+      
+      if (e.target.classList.contains("remove-label")) {
+        const selectedItem = e.target.closest(".selected-label-item");
+        const labelName = selectedItem.getAttribute("data-label");
+        removeLabelFromSelection(labelName, modal);
+      }
+      
+      if (e.target.classList.contains("save-kanban-config")) {
+        saveKanbanConfiguration(modal);
+      }
+      
+      if (e.target.classList.contains("cancel-kanban-config")) {
+        modal.remove();
+      }
+    });
+  }
+
+  function addLabelToSelection(labelName, allLabels, modal) {
+    const label = allLabels.find(l => l.name === labelName);
+    if (!label) return;
+    
+    const selectedList = modal.querySelector("#selected-labels");
+    const item = document.createElement("div");
+    item.className = "selected-label-item";
+    item.setAttribute("data-label", labelName);
+    item.innerHTML = `
+      <span class="label-badge" style="background-color: ${label.color}; color: ${label.isLightText ? '#ffffff' : '#000000'};">
+        ${label.text}
+      </span>
+      <button class="remove-label">×</button>
+    `;
+    selectedList.appendChild(item);
+  }
+
+  function removeLabelFromSelection(labelName, modal) {
+    const selectedItem = modal.querySelector(`.selected-label-item[data-label="${labelName}"]`);
+    if (selectedItem) {
+      selectedItem.remove();
+    }
+    
+    const availableItem = modal.querySelector(`.config-label-item[data-label="${labelName}"]`);
+    if (availableItem) {
+      availableItem.classList.remove("selected");
+    }
+  }
+
+  function saveKanbanConfiguration(modal) {
+    const selectedItems = modal.querySelectorAll(".selected-label-item");
+    const config = Array.from(selectedItems).map(item => item.getAttribute("data-label"));
+    
+    saveKanbanConfig(config);
+    modal.remove();
+    
+    // Refresh the Kanban board
+    createKanbanBoard();
+  }
+
+
+
+  // Color contrast utility functions
+  function hexToRgb(hex) {
+    // Remove # if present
+    hex = hex.replace('#', '');
+    
+    // Handle 3-character hex codes
+    if (hex.length === 3) {
+      hex = hex.split('').map(char => char + char).join('');
+    }
+    
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    
+    return { r, g, b };
+  }
+
+  function rgbStringToRgb(rgbString) {
+    // Parse rgb(r, g, b) or rgba(r, g, b, a) strings
+    const match = rgbString.match(/rgba?\((\d+),?\s*(\d+),?\s*(\d+)/);
+    if (match) {
+      return {
+        r: parseInt(match[1]),
+        g: parseInt(match[2]),
+        b: parseInt(match[3])
+      };
+    }
+    return { r: 0, g: 0, b: 0 };
+  }
+
+  function getLuminance(r, g, b) {
+    // Convert RGB to relative luminance using WCAG formula
+    const rs = r / 255;
+    const gs = g / 255;
+    const bs = b / 255;
+    
+    const toLinear = (colorChannel) => {
+      return colorChannel <= 0.03928
+        ? colorChannel / 12.92
+        : Math.pow((colorChannel + 0.055) / 1.055, 2.4);
+    };
+    
+    return 0.2126 * toLinear(rs) + 0.7152 * toLinear(gs) + 0.0722 * toLinear(bs);
+  }
+
+  function getContrastColor(backgroundColor) {
+    let rgb;
+    
+    // Handle different color formats
+    if (backgroundColor.startsWith('#')) {
+      rgb = hexToRgb(backgroundColor);
+    } else if (backgroundColor.startsWith('rgb')) {
+      rgb = rgbStringToRgb(backgroundColor);
+    } else {
+      // Fallback for unknown formats
+      return '#000000';
+    }
+    
+    // Calculate luminance
+    const luminance = getLuminance(rgb.r, rgb.g, rgb.b);
+    
+    // Use WCAG contrast ratio threshold
+    // If luminance > 0.5, use dark text; otherwise use light text
+    return luminance > 0.5 ? '#000000' : '#ffffff';
+  }
+
+  // Initialize view mode on load
+  setTimeout(() => {
+    const currentMode = loadViewMode();
+    console.log("GitLab Milestone Compass: Initializing with view mode:", currentMode);
+    if (currentMode === "kanban") {
+      console.log("GitLab Milestone Compass: Showing Kanban view");
+      showKanbanView();
+    }
+    updateViewToggleButton();
+  }, 100);
 })();
