@@ -1317,18 +1317,20 @@
 
     updateSectionCounts();
     
-    // Apply Kanban filters if board is visible (NO REBUILDING!)
+    // Rebuild Kanban board if visible (filters changed, so need fresh data)
     const kanbanBoard = document.querySelector("#kanban-board");
     if (kanbanBoard && kanbanBoard.style.display !== "none") {
-      console.log(`[applyCombinedFiltering] Kanban board is visible, applying filters only (NO REBUILD)`);
-      applyKanbanFilters();
+      console.log(`[applyCombinedFiltering] Kanban board is visible, rebuilding with new filters: assignee="${currentFilters.assignee}", labels=[${currentFilters.labels.join(', ')}]`);
+      
+      // Rebuild the board to reflect new filtered issues
+      renderKanbanBoard(kanbanBoard);
       
       // Apply search highlighting if there's an active search
       const searchInput = document.getElementById("issue-title-search");
       if (searchInput && searchInput.value.trim() !== "") {
         setTimeout(() => {
           highlightKanbanSearchMatches(searchInput.value.trim());
-        }, 10);
+        }, 50);
       }
     }
   }
@@ -2757,6 +2759,9 @@
       }
     }
     
+    // Add cross-column highlighting for duplicate issues
+    setupCrossColumnHighlighting(kanbanBoard);
+    
     // Add profile chip handlers
     const profileChips = kanbanBoard.querySelectorAll(".kanban-profile-chip");
     profileChips.forEach(chip => {
@@ -2764,6 +2769,39 @@
         const profileId = chip.dataset.profileId;
         switchKanbanProfile(profileId);
       });
+    });
+  }
+
+  function setupCrossColumnHighlighting(kanbanBoard) {
+    const kanbanCards = kanbanBoard.querySelectorAll('.kanban-card[data-issue-number]');
+    
+    kanbanCards.forEach(card => {
+      const issueNumber = card.getAttribute('data-issue-number');
+      
+      // Skip cards without issue numbers
+      if (!issueNumber) return;
+      
+      card.addEventListener('mouseenter', () => {
+        highlightDuplicateIssues(kanbanBoard, issueNumber, true);
+      });
+      
+      card.addEventListener('mouseleave', () => {
+        highlightDuplicateIssues(kanbanBoard, issueNumber, false);
+      });
+    });
+  }
+
+  function highlightDuplicateIssues(kanbanBoard, issueNumber, highlight) {
+    const allCards = kanbanBoard.querySelectorAll(`[data-issue-number="${issueNumber}"]`);
+    
+    console.log(`${highlight ? 'Highlighting' : 'Removing highlight from'} ${allCards.length} instances of issue #${issueNumber}`);
+    
+    allCards.forEach(card => {
+      if (highlight) {
+        card.classList.add('duplicate-highlighted');
+      } else {
+        card.classList.remove('duplicate-highlighted');
+      }
     });
   }
 
@@ -3153,16 +3191,10 @@
     if (!searchInput) {
       searchInput = document.querySelector("input[type='text'][placeholder*='issue']");
     }
-    
-    console.log(`[applyKanbanFilters] Search input element:`, searchInput);
-    console.log(`[applyKanbanFilters] Search input ID: "${searchInput?.id || 'NO ID'}"`);
-    console.log(`[applyKanbanFilters] Search input classes: "${searchInput?.className || 'NO CLASSES'}"`);
-    console.log(`[applyKanbanFilters] Search input placeholder: "${searchInput?.placeholder || 'NO PLACEHOLDER'}"`);
-    
+        
     // CRITICAL FIX: Always sync search state before applying filters
     const inputSearchTerm = searchInput ? searchInput.value.trim() : "";
-    if (inputSearchTerm && inputSearchTerm !== currentFilters.titleSearch) {
-      console.log(`[applyKanbanFilters] SYNC: Updating currentFilters.titleSearch from "${currentFilters.titleSearch}" to "${inputSearchTerm}"`);
+    if (inputSearchTerm && inputSearchTerm !== currentFilters.titleSearch) {      
       currentFilters.titleSearch = inputSearchTerm;
       persistentSearchState = inputSearchTerm;
     }
@@ -3174,24 +3206,15 @@
     // Use the most specific search term available
     const activeSearchTerm = inputSearchTerm || filterSearchTerm || persistentSearchTerm;
     const hasActiveSearch = activeSearchTerm !== "";
-    const searchTerms = hasActiveSearch ? activeSearchTerm.toLowerCase().split(/\s+/).filter(term => term.length > 0) : [];
-    
-    console.log(`[applyKanbanFilters] Input search: "${inputSearchTerm}", Filter search: "${filterSearchTerm}", Persistent search: "${persistentSearchTerm}"`);
-    console.log(`[applyKanbanFilters] Active search term: "${activeSearchTerm}", hasActiveSearch: ${hasActiveSearch}`);
-    
-    console.log(`[applyKanbanFilters] Found ${kanbanCards.length} cards, hideClosedState: ${hideClosedState}, hasActiveSearch: ${hasActiveSearch}, searchTerms: [${searchTerms.join(', ')}]`);
-    console.log(`[applyKanbanFilters] currentFilters.titleSearch: "${currentFilters.titleSearch || 'NOT SET'}"`);
-    console.log(`[applyKanbanFilters] Search input value: "${searchInput?.value || 'NO INPUT'}"`);
+    const searchTerms = hasActiveSearch ? activeSearchTerm.toLowerCase().split(/\s+/).filter(term => term.length > 0) : [];      
     
     // If search input exists but currentFilters.titleSearch is not set, set it
-    if (hasActiveSearch && (!currentFilters.titleSearch || currentFilters.titleSearch !== searchInput.value)) {
-      console.log(`[applyKanbanFilters] Updating currentFilters.titleSearch from "${currentFilters.titleSearch}" to "${searchInput.value}"`);
+    if (hasActiveSearch && (!currentFilters.titleSearch || currentFilters.titleSearch !== searchInput.value)) {      
       currentFilters.titleSearch = searchInput.value;
     }
     
     // Debug: Log all card titles to see what we have
     if (hasActiveSearch) {
-      console.log(`[applyKanbanFilters] All card titles:`);
       kanbanCards.forEach((card, index) => {
         const titleLink = card.querySelector('.kanban-card-title a');
         const title = titleLink ? titleLink.textContent : 'NO TITLE';
@@ -3206,24 +3229,18 @@
       const titleLink = card.querySelector('.kanban-card-title a');
       const title = titleLink ? titleLink.textContent.toLowerCase() : 'NO TITLE';
       
-      console.log(`[applyKanbanFilters] Card ${index + 1}: "${title}"`);
       
       // Check search filter first (highest priority)
       if (hasActiveSearch) {
         if (titleLink) {
           const matchesSearch = searchTerms.every(term => title.includes(term));
-          console.log(`[applyKanbanFilters] Search terms: [${searchTerms.join(', ')}], title: "${title}", matches: ${matchesSearch}`);
           if (!matchesSearch) {
             shouldShow = false;
-            console.log(`[applyKanbanFilters] Hiding card due to search filter mismatch`);
           }
         } else {
-          console.log(`[applyKanbanFilters] Card has no title link, hiding`);
           shouldShow = false;
         }
-      } else {
-        console.log(`[applyKanbanFilters] No active search, showing card`);
-      }
+      } 
       
       // Apply hide closed filter
       if (shouldShow && hideClosedState) {
@@ -3231,12 +3248,10 @@
         if (statusBadge && statusBadge.textContent.trim() === 'C') {
           // Hide closed issues when hide closed toggle is enabled
           shouldShow = false;
-          console.log(`[applyKanbanFilters] Hiding closed issue due to Hide Closed toggle`);
         }
       }
       
       card.style.display = shouldShow ? '' : 'none';
-      console.log(`[applyKanbanFilters] Card ${index + 1} final decision: ${shouldShow ? 'SHOW' : 'HIDE'}`);
     });
     
     // Update column counts after applying filter
@@ -3265,10 +3280,8 @@
       // Only change visibility if it's different from current state (reduces flickering)
       if (shouldHideColumn && !isCurrentlyHidden) {
         column.style.display = 'none';
-        console.log(`Hiding empty column: ${column.querySelector('.kanban-label')?.textContent || 'Unknown'}`);
       } else if (!shouldHideColumn && isCurrentlyHidden) {
         column.style.display = '';
-        console.log(`Showing column: ${column.querySelector('.kanban-label')?.textContent || 'Unknown'}`);
       }
     });
   }
@@ -3441,8 +3454,12 @@
     // Debug logging to help identify status detection issues
     const issueTitle = title.substring(0, 50);
     
+    // Extract issue number for duplicate highlighting
+    const issueNumMatch = (issueNumber + title).match(/#(\d+)/);
+    const extractedIssueNum = issueNumMatch ? issueNumMatch[1] : "";
+
     return `
-      <div class="issuable-row kanban-card" data-issue-url="${link}">
+      <div class="issuable-row kanban-card" data-issue-url="${link}" data-issue-number="${extractedIssueNum}">
         <div class="kanban-card-title">
           <a href="${link}">${issueNumber}${title}</a>
         </div>
@@ -3587,8 +3604,8 @@
       const hasMiscCriteria = !configuredLabels.some(configLabel => issueLabels.includes(configLabel));
       if (!hasMiscCriteria) return false;
       
-      // Apply existing filter logic
-      return applyFiltersToIssue(issue);
+      // Apply existing filter logic (BUT NOT SEARCH - that will be applied to Kanban cards)
+      return applyNonSearchFiltersToIssue(issue);
     });
   }
 

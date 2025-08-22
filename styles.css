@@ -811,6 +811,15 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
+/* Cross-column duplicate issue highlighting */
+.kanban-card.duplicate-highlighted {
+    border: 2px solid var(--blue-500, #3b82f6) !important;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.4) !important;
+    background: rgba(59, 130, 246, 0.05) !important;
+    transform: scale(1.02);
+    z-index: 5;
+}
+
 /* Dynamic contrast colors are applied via inline styles by JavaScript */
 
 /* Bright Button Text Contrast Fix */
