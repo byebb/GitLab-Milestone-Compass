@@ -976,17 +976,43 @@ body {
 .selected-label-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
     padding: 8px 12px;
     margin-bottom: 4px;
     background: var(--gray-700, #525252);
     border: 1px solid var(--blue-500, #428bca);
     border-radius: 4px;
-    cursor: move;
+    cursor: grab;
+    transition: background-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 }
 
-.selected-label-item:last-child {
-    margin-bottom: 0;
+.selected-label-item:hover {
+    background: var(--gray-600, #666666);
+    transform: translateY(-1px);
+}
+
+.selected-label-item:active {
+    cursor: grabbing;
+}
+
+.selected-label-item.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+/* Drag handle styling */
+.selected-label-item .drag-handle {
+    color: var(--gray-400, #a0a0a0);
+    font-size: 12px;
+    line-height: 1;
+    cursor: grab;
+    user-select: none;
+    padding: 2px;
+    margin-right: 4px;
+}
+
+.selected-label-item:active .drag-handle {
+    cursor: grabbing;
 }
 
 .label-badge {

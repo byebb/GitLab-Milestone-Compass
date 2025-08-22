@@ -3991,13 +3991,82 @@
     const item = document.createElement("div");
     item.className = "selected-label-item";
     item.setAttribute("data-label", labelName);
+    
+    // Add drag and drop attributes
+    item.draggable = true;
     item.innerHTML = `
+      <span class="drag-handle">⋮⋮</span>
       <span class="label-badge" style="background-color: ${label.color}; color: ${label.isLightText ? '#ffffff' : '#000000'};">
         ${label.text}
       </span>
       <button class="remove-label">×</button>
     `;
+    
+    // Add drag event listeners
+    setupDragAndDrop(item, selectedList);
+    
     selectedList.appendChild(item);
+  }
+
+  // Global variable to track the currently dragged element
+  let currentDraggedElement = null;
+
+  function setupDragAndDrop(item, selectedList) {
+    item.addEventListener('dragstart', (e) => {
+      currentDraggedElement = item;
+      item.style.opacity = '0.5';
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', item.outerHTML);
+      console.log(`Started dragging: ${item.getAttribute('data-label')}`);
+    });
+
+    item.addEventListener('dragend', (e) => {
+      item.style.opacity = '';
+      item.classList.remove('dragging');
+      currentDraggedElement = null;
+      console.log(`Finished dragging: ${item.getAttribute('data-label')}`);
+    });
+
+    // Setup drop zone for the container (only once per container)
+    if (!selectedList.hasAttribute('data-drop-setup')) {
+      selectedList.setAttribute('data-drop-setup', 'true');
+      
+      selectedList.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        
+        if (currentDraggedElement) {
+          const afterElement = getDragAfterElement(selectedList, e.clientY);
+          if (afterElement == null) {
+            selectedList.appendChild(currentDraggedElement);
+          } else {
+            selectedList.insertBefore(currentDraggedElement, afterElement);
+          }
+        }
+      });
+
+      selectedList.addEventListener('drop', (e) => {
+        e.preventDefault();
+        // The dragged element should already be in the correct position
+        console.log('Kanban column order updated');
+      });
+    }
+  }
+
+  function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.selected-label-item:not(.dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      
+      if (offset < 0 && offset > closest.offset) {
+        return { offset: offset, element: child };
+      } else {
+        return closest;
+      }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
   }
 
   function removeLabelFromSelection(labelName, modal) {
