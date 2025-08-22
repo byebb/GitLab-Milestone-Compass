@@ -156,20 +156,16 @@
   // Legacy function for backward compatibility
   function loadKanbanConfig() {
     const profiles = loadKanbanProfiles();
-    const activeProfileId = loadActiveKanbanProfile();
-    
-    console.log(`Loading Kanban config - Active profile: ${activeProfileId}, Available profiles:`, Object.keys(profiles));
+    const activeProfileId = loadActiveKanbanProfile();    
     
     if (activeProfileId && profiles[activeProfileId]) {
       const config = profiles[activeProfileId].labels || [];
-      console.log(`Loaded config for profile ${activeProfileId}:`, config);
       return config;
     }
     
     // Return first available profile's labels
     const firstProfile = Object.values(profiles)[0];
     const config = firstProfile ? firstProfile.labels || [] : [];
-    console.log(`Using first available profile config:`, config);
     return config;
   }
 
@@ -2487,9 +2483,7 @@
     }
   }
 
-  function showKanbanView() {
-    console.log("GitLab Milestone Compass: Showing Kanban view");
-    
+  function showKanbanView() {    
     // Ensure status sections are hidden
     hideStatusSections();
     
@@ -2500,25 +2494,18 @@
     setTimeout(() => {
       // Ensure search state is transferred to Kanban view
       const searchInput = document.getElementById("issue-title-search");
-      console.log(`[showKanbanView] Search input found:`, searchInput);
-      console.log(`[showKanbanView] Search input value: "${searchInput?.value || 'EMPTY'}"`);
-      console.log(`[showKanbanView] currentFilters.titleSearch before: "${currentFilters.titleSearch || 'NOT SET'}"`);
-      console.log(`[showKanbanView] persistentSearchState: "${persistentSearchState || 'NOT SET'}"`);
       
       // Use persistent search state if available
       if (persistentSearchState && persistentSearchState.trim() !== "") {
-        console.log(`[showKanbanView] Restoring from persistentSearchState: "${persistentSearchState}"`);
         currentFilters.titleSearch = persistentSearchState;
         if (searchInput) {
           searchInput.value = persistentSearchState; // Restore the search input value
         }
       } else if (currentFilters.titleSearch && currentFilters.titleSearch.trim() !== "") {
-        console.log(`[showKanbanView] Preserving existing search state: "${currentFilters.titleSearch}"`);
         if (searchInput) {
           searchInput.value = currentFilters.titleSearch; // Restore the search input value
         }
       } else if (searchInput && searchInput.value.trim() !== "") {
-        console.log(`[showKanbanView] Transferring search state from input: "${searchInput.value}"`);
         currentFilters.titleSearch = searchInput.value;
         persistentSearchState = searchInput.value;
       }
@@ -2531,9 +2518,7 @@
     }, 100);
   }
 
-  function showStatusView() {
-    console.log("GitLab Milestone Compass: Showing Status view");
-    
+  function showStatusView() {    
     // Ensure Kanban board is hidden
     hideKanbanBoard();
     
@@ -2570,9 +2555,7 @@
     }
   }
 
-  function createKanbanBoard() {
-    console.log("GitLab Milestone Compass: Creating Kanban board");
-    
+  function createKanbanBoard() {    
     // Build issue status mapping for reliable status detection
     buildIssueStatusMap();
     
@@ -2606,9 +2589,7 @@
     const profiles = loadKanbanProfiles();
     const activeProfileId = loadActiveKanbanProfile();
     const config = loadKanbanConfig();
-    const allLabels = extractLabels();
-    
-    console.log(`Rendering Kanban board - Profiles: ${Object.keys(profiles).length}, Active: ${activeProfileId}, Config:`, config, 'Available labels:', allLabels.length);
+    const allLabels = extractLabels();  
     
     // If no profiles exist, show empty state
     if (Object.keys(profiles).length === 0) {
@@ -2744,7 +2725,6 @@
       // Ensure search state is transferred to Kanban view
       const searchInput = document.getElementById("issue-title-search");
       if (searchInput && searchInput.value.trim() !== "") {
-        console.log(`[createKanbanBoard] Transferring search state: "${searchInput.value}"`);
         currentFilters.titleSearch = searchInput.value;
       }
       
@@ -2794,8 +2774,6 @@
   function highlightDuplicateIssues(kanbanBoard, issueNumber, highlight) {
     const allCards = kanbanBoard.querySelectorAll(`[data-issue-number="${issueNumber}"]`);
     
-    console.log(`${highlight ? 'Highlighting' : 'Removing highlight from'} ${allCards.length} instances of issue #${issueNumber}`);
-    
     allCards.forEach(card => {
       if (highlight) {
         card.classList.add('duplicate-highlighted');
@@ -2809,7 +2787,6 @@
     const profiles = loadKanbanProfiles();
     if (profiles[profileId]) {
       saveActiveKanbanProfile(profileId);
-      console.log(`Switching to profile: ${profiles[profileId].title}, Labels: ${profiles[profileId].labels?.join(', ') || 'none'}`);
       
       const kanbanBoard = document.getElementById("kanban-board");
       if (kanbanBoard) {
@@ -2817,7 +2794,6 @@
         kanbanBoard.innerHTML = '';
         renderKanbanBoard(kanbanBoard);
       }
-      console.log(`Switched to Kanban profile: ${profiles[profileId].title}`);
     } else {
       console.error(`Profile ${profileId} not found in:`, profiles);
     }
@@ -2834,14 +2810,11 @@
     let columns = "";
     let usedIssues = new Set(); // Track issues already placed in columns
     
-    console.log(`Kanban render: Found ${allIssueElements.length} total issue elements, ${allIssues.length} original issues (excluding kanban cards), Config labels: ${config.join(', ')}`);
-    
     // Create columns for configured labels (only if they have issues)
     config.forEach(labelName => {
       const label = allLabels.find(l => l.name === labelName);
       if (label) {
         const issues = getFilteredIssuesForKanbanLabel(labelName, allIssues);
-        console.log(`Label "${labelName}": Found ${issues.length} issues`);
         // Only create column if it has issues
         if (issues.length > 0) {
           columns += createKanbanColumn(label, issues);
@@ -2858,7 +2831,6 @@
     
     // Add MISC column for remaining issues (only issues NOT in other columns)
     const miscIssues = getFilteredMiscIssuesForKanban(config, allIssues, usedIssues);
-    console.log(`MISC column: Found ${miscIssues.length} unique issues not in other columns (${usedIssues.size} issues already used)`);
     
     if (miscIssues.length > 0) {
       columns += createMiscColumn(miscIssues);
@@ -2923,12 +2895,10 @@
     // Get issue URL for debugging
     const issueLink = issue.querySelector('a[href*="/issues/"]');
     const issueUrl = issueLink ? issueLink.href : 'unknown';
-    console.log(`\n=== Checking status for issue: ${issueUrl} ===`);
     
     // Strategy 0: Check the pre-built status mapping (most reliable)
     if (issueStatusMap.has(issueUrl)) {
       const mappedStatus = issueStatusMap.get(issueUrl);
-      console.log(`Issue status found in map: ${mappedStatus}`);
       return mappedStatus;
     }
     
@@ -2937,11 +2907,9 @@
     if (titleLink) {
       const titleStyle = window.getComputedStyle(titleLink);
       const textDecoration = titleStyle.textDecoration;
-      console.log('Title style:', { textDecoration, element: titleLink });
       
       // Check for strikethrough indicating closed issue
       if (textDecoration.includes('line-through')) {
-        console.log('Issue identified as completed via strikethrough text');
         return 'completed';
       }
     }
@@ -2953,20 +2921,12 @@
       const badgeText = statusBadge.textContent.toLowerCase().trim();
       const badgeClasses = statusBadge.className.toLowerCase();
       
-      // Debug logging for status detection
-      console.log('Status badge found:', {
-        text: badgeText,
-        classes: badgeClasses,
-        element: statusBadge
-      });
-      
       // Check for closed/completed indicators
       if (badgeText.includes('closed') || 
           badgeText.includes('completed') || 
           badgeText.includes('done') ||
           badgeClasses.includes('closed') ||
           badgeClasses.includes('state-closed')) {
-        console.log('Issue identified as completed via status badge');
         return 'completed';
       }
     }
@@ -2975,10 +2935,7 @@
     const dataState = issue.getAttribute('data-state');
     const dataStatus = issue.getAttribute('data-status');
     
-    console.log('Data attributes:', { dataState, dataStatus });
-    
     if (dataState === 'closed' || dataStatus === 'closed') {
-      console.log('Issue identified as completed via data attributes');
       return 'completed';
     }
     
@@ -3023,7 +2980,6 @@
     });
     
     if (hasStrictClosedPattern) {
-      console.log('Issue identified as completed via strict pattern matching');
       return 'completed';
     }
     
@@ -3032,11 +2988,9 @@
     if (parentSection) {
       const sectionId = parentSection.id || '';
       const sectionClasses = parentSection.className || '';
-      console.log('Parent section:', { id: sectionId, classes: sectionClasses });
       
       if (sectionId.includes('closed') || sectionId.includes('completed') ||
           sectionClasses.includes('closed') || sectionClasses.includes('completed')) {
-        console.log('Issue identified as completed via parent section');
         return 'completed';
       }
     }
@@ -3051,7 +3005,6 @@
       if ((elementText.includes('closed') || elementClasses.includes('closed')) &&
           (elementText.includes('issue') || elementClasses.includes('issue') || 
            elementClasses.includes('state') || elementClasses.includes('status'))) {
-        console.log('Issue identified as completed via broad element search:', element);
         return 'completed';
       }
     }
@@ -3073,14 +3026,12 @@
       });
       
       if (isInClosedSection) {
-        console.log('Issue identified as completed via closed section membership');
         return 'completed';
       }
     }
     
     // Strategy 10: Check for absence of "open" indicators (GitLab sometimes only shows open state)
     const openIndicators = issue.querySelectorAll('.state-opened, [data-state="opened"], .issue-state-open, .gl-badge-success');
-    console.log('Open indicators found:', openIndicators.length);
     
     // If we found specific "open" indicators and this issue doesn't have them, it might be closed
     // But this is less reliable, so we'll be conservative here
@@ -3099,7 +3050,6 @@
     for (const selector of assigneeSelectors) {
       const element = issue.querySelector(selector);
       if (element) {
-        console.log('Assignee element found:', { selector, element, src: element.src });
         if (element.src && !element.src.includes('default') && !element.src.includes('placeholder')) {
           assigneeFound = true;
           break;
@@ -3108,12 +3058,9 @@
     }
     
     if (assigneeFound) {
-      console.log('Issue identified as ongoing (has assignee)');
       return 'ongoing';
     }
     
-    // No assignee and not closed = unstarted
-    console.log('Issue identified as unstarted (no assignee, not closed)');
     return 'unstarted';
   }
 
@@ -3158,11 +3105,6 @@
         }
       });
     }
-    
-    console.log('Issue status map built:', {
-      totalIssues: issueStatusMap.size,
-      map: Array.from(issueStatusMap.entries())
-    });
   }
 
   // Helper functions for hide closed issues feature
@@ -3213,14 +3155,6 @@
       currentFilters.titleSearch = searchInput.value;
     }
     
-    // Debug: Log all card titles to see what we have
-    if (hasActiveSearch) {
-      kanbanCards.forEach((card, index) => {
-        const titleLink = card.querySelector('.kanban-card-title a');
-        const title = titleLink ? titleLink.textContent : 'NO TITLE';
-        console.log(`  ${index + 1}: "${title}"`);
-      });
-    }
     
     kanbanCards.forEach((card, index) => {
       let shouldShow = true;
@@ -3366,17 +3300,6 @@
           title = cleanTitle;
         }
       }
-      
-      // Debug logging to help identify the issue structure
-      console.log("GitLab Milestone Compass: Could not extract title from issue:", {
-        outerHTML: issue.outerHTML.substring(0, 200),
-        textContent: issue.textContent.substring(0, 100),
-        availableLinks: Array.from(issue.querySelectorAll('a')).map(a => ({
-          href: a.getAttribute('href'),
-          title: a.getAttribute('title'),
-          text: a.textContent.trim()
-        }))
-      });
     }
     
     // Extract issue number from the link, title, or issue element
@@ -3517,8 +3440,6 @@
 
   // Filtered versions for Kanban that respect existing filter logic
   function getFilteredIssuesForKanbanLabel(labelName, allIssues) {
-    console.log(`[getFilteredIssuesForKanbanLabel] Filtering ${allIssues.length} issues for label "${labelName}"`);
-    
     const filteredIssues = Array.from(allIssues).filter(issue => {
       // Ensure we're working with actual issue rows
       if (!issue.classList.contains('issuable-row')) {
@@ -3545,7 +3466,6 @@
       return applyNonSearchFiltersToIssue(issue);
     });
     
-    console.log(`[getFilteredIssuesForKanbanLabel] Filtered ${filteredIssues.length} issues for label "${labelName}"`);
     return filteredIssues;
   }
 
@@ -3700,12 +3620,9 @@
       
       const searchTerms = currentFilters.titleSearch.toLowerCase().split(/\s+/).filter(term => term.length > 0);
       const hasAllTerms = searchTerms.every(term => title.includes(term));
-      if (!hasAllTerms) {
-        console.log(`[applyFiltersToIssue] Search filter rejected issue. Search terms: [${searchTerms.join(', ')}], Title: "${title}"`);
+      if (!hasAllTerms) {        
         return false;
-      } else {
-        console.log(`[applyFiltersToIssue] Search filter accepted issue. Search terms: [${searchTerms.join(', ')}], Title: "${title}"`);
-      }
+      } 
     }
     
     return true;
@@ -4178,20 +4095,16 @@
   }
 
   function initializeViewMode() {
-    console.log("GitLab Milestone Compass: Initializing view mode");
     
     // Ensure clean state - hide both views first
     hideKanbanBoard();
     hideStatusSections();
     
     const currentMode = loadViewMode();
-    console.log("GitLab Milestone Compass: Current view mode:", currentMode);
     
     if (currentMode === "kanban") {
-      console.log("GitLab Milestone Compass: Showing Kanban view");
       showKanbanView();
     } else {
-      console.log("GitLab Milestone Compass: Showing Status view");
       showStatusView();
     }
     
