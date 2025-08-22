@@ -1164,11 +1164,11 @@
 
           countSpan.textContent = `(${count})`;
 
-          // Hide assignees with zero count when filtering
-          if (
-            (currentFilters.labels.length > 0 || hasActiveSearch) &&
-            count === 0
-          ) {
+          // Hide assignees with zero count when filtering (but keep selected assignees visible)
+          const isSelectedAssignee = currentFilters.assignee === assignee.name;
+          const hasActiveFilters = currentFilters.labels.length > 0 || hasActiveSearch;
+          
+          if (hasActiveFilters && count === 0 && !isSelectedAssignee) {
             assigneeItem.style.display = "none";
           } else {
             assigneeItem.style.display = "flex";
@@ -1587,17 +1587,27 @@
       const hasTargetLabel = issueLabels.includes(labelName);
       if (!hasTargetLabel) return;
 
-      // Check assignee filter if specified
+      // Check assignee filter if specified (including alternative assignees)
       if (assigneeName) {
         const assigneeIcon = issue.querySelector(
           '.assignee-icon a[title*="Assigned to"]'
         );
-        const hasAssignee =
+        const normalAssigneeMatches =
           assigneeIcon &&
           assigneeIcon
             .getAttribute("title")
             .includes(`Assigned to ${assigneeName}`);
-        if (!hasAssignee) return;
+        
+        // Check for alternative assignee labels
+        const altAssigneePrefix = loadAlternativeAssigneePrefix();
+        const expectedAltLabel = `${altAssigneePrefix}${assigneeName}`;
+        const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+        const alternativeAssigneeMatches = Array.from(labelLinks).some((link) => {
+          const labelSpan = link.querySelector(".gl-label-text");
+          return labelSpan && labelSpan.textContent.trim() === expectedAltLabel;
+        });
+
+        if (!normalAssigneeMatches && !alternativeAssigneeMatches) return;
       }
 
       // Check if issue has all other selected labels (excluding the target label)
@@ -1711,17 +1721,27 @@
       const hasTargetLabel = issueLabels.includes(labelName);
       if (!hasTargetLabel) return;
 
-      // Check assignee filter if specified
+      // Check assignee filter if specified (including alternative assignees)
       if (assigneeName) {
         const assigneeIcon = issue.querySelector(
           '.assignee-icon a[title*="Assigned to"]'
         );
-        const hasAssignee =
+        const normalAssigneeMatches =
           assigneeIcon &&
           assigneeIcon
             .getAttribute("title")
             .includes(`Assigned to ${assigneeName}`);
-        if (!hasAssignee) return;
+        
+        // Check for alternative assignee labels
+        const altAssigneePrefix = loadAlternativeAssigneePrefix();
+        const expectedAltLabel = `${altAssigneePrefix}${assigneeName}`;
+        const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+        const alternativeAssigneeMatches = Array.from(labelLinks).some((link) => {
+          const labelSpan = link.querySelector(".gl-label-text");
+          return labelSpan && labelSpan.textContent.trim() === expectedAltLabel;
+        });
+
+        if (!normalAssigneeMatches && !alternativeAssigneeMatches) return;
       }
 
       // Check if issue has all other selected labels (excluding the target label)
@@ -1903,17 +1923,27 @@
       filteredIssues = Array.from(filteredIssues).filter((issue) => {
         let matches = true;
 
-        // Check assignee filter
+        // Check assignee filter (including alternative assignees)
         if (currentFilters.assignee) {
           const assigneeIcon = issue.querySelector(
             '.assignee-icon a[title*="Assigned to"]'
           );
-          const assigneeMatches =
+          const normalAssigneeMatches =
             assigneeIcon &&
             assigneeIcon
               .getAttribute("title")
               .includes(`Assigned to ${currentFilters.assignee}`);
-          if (!assigneeMatches) matches = false;
+          
+          // Check for alternative assignee labels
+          const altAssigneePrefix = loadAlternativeAssigneePrefix();
+          const expectedAltLabel = `${altAssigneePrefix}${currentFilters.assignee}`;
+          const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+          const alternativeAssigneeMatches = Array.from(labelLinks).some((link) => {
+            const labelSpan = link.querySelector(".gl-label-text");
+            return labelSpan && labelSpan.textContent.trim() === expectedAltLabel;
+          });
+
+          if (!normalAssigneeMatches && !alternativeAssigneeMatches) matches = false;
         }
 
         // Check label filters (AND logic - issue must have ALL selected labels)
