@@ -21,6 +21,25 @@
     }, 500);
   }
 
+  // LocalStorage functions for alternative assignee prefix
+  function saveAlternativeAssigneePrefix(prefix) {
+    try {
+      localStorage.setItem("gitlab-milestone-alt-assignee-prefix", prefix);
+    } catch (e) {
+      // Could not save alternative assignee prefix
+    }
+  }
+
+  function loadAlternativeAssigneePrefix() {
+    try {
+      const prefix = localStorage.getItem("gitlab-milestone-alt-assignee-prefix");
+      return prefix || "👤::";
+    } catch (e) {
+      // Could not load alternative assignee prefix
+      return "👤::";
+    }
+  }
+
   // LocalStorage functions for remembering module states
   function saveModuleStates(assigneeVisible, labelVisible) {
     const states = {
@@ -273,6 +292,7 @@
 
   function extractAssignees() {
     const assignees = new Map(); // Use Map to avoid duplicates
+    const altAssigneePrefix = loadAlternativeAssigneePrefix();
 
     // Find all assignee icons across all issue lists
     const assigneeIcons = document.querySelectorAll(
@@ -301,19 +321,58 @@
               avatar: avatarSrc,
               id: assigneeId,
               link: link.getAttribute("href"),
+              isAlternative: false,
             });
           }
         }
       }
     });
 
-    return Array.from(assignees.values()).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
+    // Extract alternative assignees from labels with the configured prefix
+    const labelElements = document.querySelectorAll(".gl-label .gl-label-link");
+    
+    labelElements.forEach((link) => {
+      const href = link.getAttribute("href");
+      const labelSpan = link.querySelector(".gl-label-text");
+
+      if (href && labelSpan) {
+        // Extract label name from href parameter
+        const urlMatch = href.match(/label_name=([^&]+)/);
+        if (urlMatch) {
+          const labelName = decodeURIComponent(urlMatch[1]);
+          const labelText = labelSpan.textContent.trim();
+
+          // Check if this label starts with the alternative assignee prefix
+          if (labelText.startsWith(altAssigneePrefix)) {
+            const assigneeName = labelText.substring(altAssigneePrefix.length).trim();
+            
+            if (assigneeName && !assignees.has(assigneeName)) {
+              // Create alternative assignee entry (use milestone compass icon)
+              assignees.set(assigneeName, {
+                name: assigneeName,
+                avatar: chrome.runtime.getURL("icons/icon48.png"), // Use the actual extension icon
+                id: null,
+                link: null,
+                isAlternative: true,
+                originalLabel: labelName,
+              });
+            }
+          }
+        }
+      }
+    });
+
+    return Array.from(assignees.values()).sort((a, b) => {
+      // Sort regular assignees first, then alternative assignees
+      if (a.isAlternative && !b.isAlternative) return 1;
+      if (!a.isAlternative && b.isAlternative) return -1;
+      return a.name.localeCompare(b.name);
+    });
   }
 
   function extractLabels() {
     const labels = new Map(); // Use Map to avoid duplicates
+    const altAssigneePrefix = loadAlternativeAssigneePrefix();
 
     // Find all label elements across all issue lists
     const labelElements = document.querySelectorAll(".gl-label .gl-label-link");
@@ -333,7 +392,8 @@
             "gl-label-text-light"
           );
 
-          if (labelName && labelText && !labels.has(labelName)) {
+          // Skip labels that start with the alternative assignee prefix
+          if (!labelText.startsWith(altAssigneePrefix) && labelName && labelText && !labels.has(labelName)) {
             labels.set(labelName, {
               name: labelName,
               text: labelText,
@@ -604,16 +664,19 @@
               assignees.length > 0
                 ? `
             <div class="filter-section" id="assignee-filter-section">
-                <h5>Assignees</h5>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h5 style="margin: 0;">Assignees [ ${loadAlternativeAssigneePrefix()} ]</h5>
+                    <button class="filter-btn prefix-config-btn" style="font-size: 11px; padding: 2px 6px;">Configure Prefix</button>
+                </div>
                 <div class="assignee-grid">
                     ${assignees
                       .map(
                         (assignee) => `
-                        <div class="assignee-item" data-assignee-id="${
+                        <div class="assignee-item ${assignee.isAlternative ? 'alternative-assignee' : ''}" data-assignee-id="${
                           assignee.id
-                        }" data-assignee-name="${assignee.name}" title="${
+                        }" data-assignee-name="${assignee.name}" data-is-alternative="${assignee.isAlternative || false}" data-original-label="${assignee.originalLabel || ''}" title="${
                           assignee.name
-                        }">
+                        }${assignee.isAlternative ? ' (Alternative Assignee)' : ''}">
                             <img src="${assignee.avatar}" alt="${
                           assignee.name
                         }" class="assignee-avatar">
@@ -621,7 +684,7 @@
                               assignee.name
                             }">${assignee.name}</span>
                             <span class="issue-count">(${getIssueCountForAssignee(
-                              assignee.name
+                              assignee.name, assignee.isAlternative
                             )})</span>
                         </div>
                     `
@@ -690,6 +753,7 @@
       const labelItem = e.target.closest(".label-item");
       const filterBtn = e.target.closest(".filter-btn");
       const labelResetBtn = e.target.closest(".label-reset-btn");
+      const prefixConfigBtn = e.target.closest(".prefix-config-btn");
       const clearSearchBtn = e.target.closest("#clear-search");
 
       if (assigneeItem) {
@@ -698,6 +762,8 @@
         handleLabelSelection(labelItem, assignees);
       } else if (labelResetBtn) {
         handleLabelReset(assignees, labels);
+      } else if (prefixConfigBtn) {
+        handlePrefixConfiguration();
       } else if (filterBtn) {
         handleFilterButton(filterBtn, assignees, labels);
       } else if (clearSearchBtn) {
@@ -815,6 +881,23 @@
 
     // Save cleared filters to localStorage
     saveAppliedFilters(currentFilters.assignee, currentFilters.labels);
+  }
+
+  function handlePrefixConfiguration() {
+    const currentPrefix = loadAlternativeAssigneePrefix();
+    const newPrefix = prompt(
+      `Enter the prefix for alternative assignees:\n\nCurrent prefix: "${currentPrefix}"\n\nExamples:\n- 👤::\n- member::\n- @:\n- user::`,
+      currentPrefix
+    );
+
+    if (newPrefix !== null && newPrefix.trim() !== "" && newPrefix !== currentPrefix) {
+      saveAlternativeAssigneePrefix(newPrefix.trim());
+      
+      // Show confirmation and reload to apply changes
+      if (confirm("Prefix updated successfully!\n\nThe page will reload to apply the changes.")) {
+        window.location.reload();
+      }
+    }
   }
 
   function handleFilterButton(button, assignees, labels) {
@@ -981,17 +1064,27 @@
         }
       }
 
-      // Then check assignee filter
+      // Then check assignee filter (including alternative assignees)
       if (matches && currentFilters.assignee) {
         const assigneeIcon = issue.querySelector(
           '.assignee-icon a[title*="Assigned to"]'
         );
-        const assigneeMatches =
+        const normalAssigneeMatches =
           assigneeIcon &&
           assigneeIcon
             .getAttribute("title")
             .includes(`Assigned to ${currentFilters.assignee}`);
-        if (!assigneeMatches) matches = false;
+        
+        // Check for alternative assignee labels
+        const altAssigneePrefix = loadAlternativeAssigneePrefix();
+        const expectedAltLabel = `${altAssigneePrefix}${currentFilters.assignee}`;
+        const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+        const alternativeAssigneeMatches = Array.from(labelLinks).some((link) => {
+          const labelSpan = link.querySelector(".gl-label-text");
+          return labelSpan && labelSpan.textContent.trim() === expectedAltLabel;
+        });
+
+        if (!normalAssigneeMatches && !alternativeAssigneeMatches) matches = false;
       }
 
       // Then check label filters (AND logic - issue must have ALL selected labels)
@@ -1057,7 +1150,7 @@
               currentFilters.labels
             );
           } else {
-            count = getIssueCountForAssignee(assignee.name);
+            count = getIssueCountForAssignee(assignee.name, assignee.isAlternative);
           }
 
           // If there's an active search, further filter by search term
@@ -1333,10 +1426,31 @@
     );
   }
 
-  function getIssueCountForAssignee(assigneeName) {
-    return document.querySelectorAll(
-      `.issuable-row .assignee-icon a[title="Assigned to ${assigneeName}"]`
-    ).length;
+  function getIssueCountForAssignee(assigneeName, isAlternative = false) {
+    if (isAlternative) {
+      // Count issues with the alternative assignee label
+      const altAssigneePrefix = loadAlternativeAssigneePrefix();
+      const expectedAltLabel = `${altAssigneePrefix}${assigneeName}`;
+      
+      const issues = document.querySelectorAll(".issuable-row");
+      let count = 0;
+      
+      issues.forEach((issue) => {
+        const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+        const hasAltAssigneeLabel = Array.from(labelLinks).some((link) => {
+          const labelSpan = link.querySelector(".gl-label-text");
+          return labelSpan && labelSpan.textContent.trim() === expectedAltLabel;
+        });
+        
+        if (hasAltAssigneeLabel) count++;
+      });
+      
+      return count;
+    } else {
+      return document.querySelectorAll(
+        `.issuable-row .assignee-icon a[title="Assigned to ${assigneeName}"]`
+      ).length;
+    }
   }
 
   function getFilteredIssueCountForAssignee(assigneeName, labelName) {
@@ -1406,16 +1520,26 @@
     let count = 0;
 
     visibleIssues.forEach((issue) => {
-      // Check assignee
+      // Check assignee (both normal and alternative)
       const assigneeIcon = issue.querySelector(
         '.assignee-icon a[title*="Assigned to"]'
       );
-      const hasAssignee =
+      const normalAssigneeMatches =
         assigneeIcon &&
         assigneeIcon
           .getAttribute("title")
           .includes(`Assigned to ${assigneeName}`);
-      if (!hasAssignee) return;
+      
+      // Check for alternative assignee labels
+      const altAssigneePrefix = loadAlternativeAssigneePrefix();
+      const expectedAltLabel = `${altAssigneePrefix}${assigneeName}`;
+      const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+      const alternativeAssigneeMatches = Array.from(labelLinks).some((link) => {
+        const labelSpan = link.querySelector(".gl-label-text");
+        return labelSpan && labelSpan.textContent.trim() === expectedAltLabel;
+      });
+
+      if (!normalAssigneeMatches && !alternativeAssigneeMatches) return;
 
       // Check if issue has all selected labels
       if (selectedLabels.length > 0) {
@@ -1505,16 +1629,26 @@
     let count = 0;
 
     visibleIssues.forEach((issue) => {
-      // Check assignee
+      // Check assignee (both normal and alternative)
       const assigneeIcon = issue.querySelector(
         '.assignee-icon a[title*="Assigned to"]'
       );
-      const hasAssignee =
+      const normalAssigneeMatches =
         assigneeIcon &&
         assigneeIcon
           .getAttribute("title")
           .includes(`Assigned to ${assigneeName}`);
-      if (!hasAssignee) return;
+      
+      // Check for alternative assignee labels
+      const altAssigneePrefix = loadAlternativeAssigneePrefix();
+      const expectedAltLabel = `${altAssigneePrefix}${assigneeName}`;
+      const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+      const alternativeAssigneeMatches = Array.from(labelLinks).some((link) => {
+        const labelSpan = link.querySelector(".gl-label-text");
+        return labelSpan && labelSpan.textContent.trim() === expectedAltLabel;
+      });
+
+      if (!normalAssigneeMatches && !alternativeAssigneeMatches) return;
 
       // Check if issue has all selected labels
       if (selectedLabels.length > 0) {

@@ -459,6 +459,54 @@
     }
 }
 
+/* Alternative Assignee Styles */
+.milestone-assignee-filter .assignee-item.alternative-assignee {
+    border-left: 3px solid #002b56;
+    background: linear-gradient(135deg, #3a383f, #4a463f);
+}
+
+.milestone-assignee-filter .assignee-item.alternative-assignee:hover {
+    border-left-color: #4dafff;
+    /* Use a blue shadow matching the border color */
+    box-shadow: 0 2px 8px rgba(0, 89, 255, 0.18);
+}
+
+.milestone-assignee-filter .assignee-item.alternative-assignee.selected {
+    border-left-color: #002b56;
+    background: linear-gradient(135deg, #3d3310, #4d4015);
+    border: 2px solid #002b56;
+    /* Blue shadow to match border, subtle white inset for highlight */
+    box-shadow: 0 0 0 1px rgba(0, 43, 86, 0.35), 
+                0 2px 8px rgba(0, 89, 255, 0.18),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.milestone-assignee-filter .assignee-item.alternative-assignee.selected::after {
+    background: #002b56;
+    box-shadow: 0 0 4px rgba(0, 89, 255, 0.6);
+}
+
+.milestone-assignee-filter .assignee-item.alternative-assignee .assignee-avatar {
+    border: 1px solid #002b56;
+    /* background: #ffffff; */
+    padding: 1px;
+    border-radius: 50%;
+}
+
+/* Configure Prefix Button */
+.milestone-assignee-filter .prefix-config-btn {
+    background: #2d2d30;
+    border-color: #555555;
+    color: #ffffff;
+    transition: all 0.2s ease;
+}
+
+.milestone-assignee-filter .prefix-config-btn:hover {
+    background: #404040;
+    border-color: #666666;
+    color: #ffffff;
+}
+
 /* Integration with GitLab styles */
 .milestone-assignee-filter {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
