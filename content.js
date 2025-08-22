@@ -959,22 +959,16 @@
       issueSearchInput.addEventListener("input", (e) => {
         const searchValue = e.target.value;
         
-        // If search is cleared to empty, call clearTitleSearch() for full reset
-        if (searchValue.trim() === "") {
-          console.log(`[input event] Search cleared to empty, calling clearTitleSearch()`);
-          clearTitleSearch();
-          return;
-        }
-        
-        // Otherwise, apply the search filter normally
+        // Always apply the search filter (including empty search)
         filterIssuesByTitle(searchValue);
         
-        // CRITICAL FIX: Apply Kanban filters if Kanban board is visible
+        // CRITICAL FIX: Apply Kanban filters if Kanban board is visible (NO REBUILDING!)
         const kanbanBoard = document.querySelector("#kanban-board");
         if (kanbanBoard && kanbanBoard.style.display !== "none") {
-          console.log(`[input event] Kanban board is visible, applying filters for search: "${searchValue}"`);
+          console.log(`[input event] Kanban board is visible, applying filters for search: "${searchValue}" (NO REBUILD)`);
           // Small delay to ensure filterIssuesByTitle has completed
           setTimeout(() => {
+            // ONLY filter existing cards - do NOT rebuild the board
             applyKanbanFilters();
             // Always call highlighting function - it will clear highlights if search is empty
             highlightKanbanSearchMatches(searchValue.trim());
@@ -1323,8 +1317,20 @@
 
     updateSectionCounts();
     
-    // Refresh Kanban board if it's currently displayed
-    refreshKanbanBoardIfVisible();
+    // Apply Kanban filters if board is visible (NO REBUILDING!)
+    const kanbanBoard = document.querySelector("#kanban-board");
+    if (kanbanBoard && kanbanBoard.style.display !== "none") {
+      console.log(`[applyCombinedFiltering] Kanban board is visible, applying filters only (NO REBUILD)`);
+      applyKanbanFilters();
+      
+      // Apply search highlighting if there's an active search
+      const searchInput = document.getElementById("issue-title-search");
+      if (searchInput && searchInput.value.trim() !== "") {
+        setTimeout(() => {
+          highlightKanbanSearchMatches(searchInput.value.trim());
+        }, 10);
+      }
+    }
   }
 
   function refreshKanbanBoardIfVisible() {
@@ -2165,10 +2171,13 @@
     console.log(`[filterIssuesByTitle] Setting currentFilters.titleSearch to: "${searchTerm}"`);
     currentFilters.titleSearch = searchTerm;
     
-    // Also update persistent search state (but only for non-empty searches)
+    // Update persistent search state
     if (searchTerm.trim() !== "") {
       persistentSearchState = searchTerm;
       console.log(`[filterIssuesByTitle] Updated persistentSearchState to: "${persistentSearchState}"`);
+    } else {
+      persistentSearchState = "";
+      console.log(`[filterIssuesByTitle] Cleared persistentSearchState`);
     }
 
     if (normalizedSearchTerm === "") {
@@ -2613,6 +2622,20 @@
                 <input type="checkbox" id="hide-closed-issues" />
                 <span class="toggle-label">Hide Closed</span>
               </label>
+              <div class="kanban-status-legend">
+                <span class="legend-item">
+                  <span class="legend-badge unstarted">U</span>
+                  <span class="legend-text">Unstarted</span>
+                </span>
+                <span class="legend-item">
+                  <span class="legend-badge ongoing">O</span>
+                  <span class="legend-text">Ongoing</span>
+                </span>
+                <span class="legend-item">
+                  <span class="legend-badge completed">C</span>
+                  <span class="legend-text">Completed</span>
+                </span>
+              </div>
               <button class="btn btn-sm btn-default configure-kanban-btn">Configure Profiles</button>
             </div>
           </div>
@@ -2667,6 +2690,20 @@
               <input type="checkbox" id="hide-closed-issues" />
               <span class="toggle-label">Hide Closed</span>
             </label>
+            <div class="kanban-status-legend">
+              <span class="legend-item">
+                <span class="legend-badge unstarted">U</span>
+                <span class="legend-text">Unstarted</span>
+              </span>
+              <span class="legend-item">
+                <span class="legend-badge ongoing">O</span>
+                <span class="legend-text">Ongoing</span>
+              </span>
+              <span class="legend-item">
+                <span class="legend-badge completed">C</span>
+                <span class="legend-text">Completed</span>
+              </span>
+            </div>
             <button class="btn btn-sm btn-default configure-kanban-btn">Configure</button>
           </div>
         </div>
@@ -3222,11 +3259,16 @@
       }
       
       // Hide empty columns to avoid unnecessary horizontal scrolling
-      if (visibleCards.length === 0) {
+      const shouldHideColumn = visibleCards.length === 0;
+      const isCurrentlyHidden = column.style.display === 'none';
+      
+      // Only change visibility if it's different from current state (reduces flickering)
+      if (shouldHideColumn && !isCurrentlyHidden) {
         column.style.display = 'none';
         console.log(`Hiding empty column: ${column.querySelector('.kanban-label')?.textContent || 'Unknown'}`);
-      } else {
+      } else if (!shouldHideColumn && isCurrentlyHidden) {
         column.style.display = '';
+        console.log(`Showing column: ${column.querySelector('.kanban-label')?.textContent || 'Unknown'}`);
       }
     });
   }

@@ -607,6 +607,55 @@ body {
     white-space: nowrap;
 }
 
+/* Kanban Status Legend */
+.kanban-status-legend {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    font-size: 11px;
+    color: var(--gl-text-color-secondary, #a0a0a0);
+    margin: 0 12px;
+}
+
+.kanban-status-legend .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.kanban-status-legend .legend-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: 600;
+    color: white;
+    text-align: center;
+    line-height: 1;
+}
+
+.kanban-status-legend .legend-badge.unstarted {
+    background-color: #6b7280; /* Gray for unstarted */
+}
+
+.kanban-status-legend .legend-badge.ongoing {
+    background-color: #3b82f6; /* Blue for ongoing */
+}
+
+.kanban-status-legend .legend-badge.completed {
+    background-color: #10b981; /* Green for completed */
+}
+
+.kanban-status-legend .legend-text {
+    font-size: 10px;
+    font-weight: 400;
+}
+
 .kanban-header .gl-card-title {
     margin: 0;
     font-size: 16px;
@@ -631,6 +680,8 @@ body {
     min-width: 250px;
     max-width: 250px;
     flex-shrink: 0;
+    /* Smooth transitions to reduce flickering */
+    transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
 }
 
 .kanban-column-header.gl-card-header {
@@ -674,7 +725,7 @@ body {
     border-radius: 4px;
     padding: 12px;
     margin-bottom: 8px;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.15s ease-in-out;
     position: relative;
 }
 
