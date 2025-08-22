@@ -539,6 +539,11 @@
 
           // Skip labels that start with the alternative assignee prefix
           if (!labelText.startsWith(altAssigneePrefix) && labelName && labelText && !labels.has(labelName)) {
+            // Debug logging for emoji labels
+            if (labelText.match(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u)) {
+              console.log(`Found emoji label: "${labelText}" (name: "${labelName}") - href: ${href}`);
+            }
+            
             labels.set(labelName, {
               name: labelName,
               text: labelText,
@@ -551,14 +556,48 @@
       }
     });
 
-    // Count occurrences of each label
+    // Count occurrences of each label using multiple methods for robustness
     labels.forEach((labelData, labelName) => {
-      const count = document.querySelectorAll(
-        `.gl-label .gl-label-link[href*="label_name=${encodeURIComponent(
-          labelName
-        )}"]`
-      ).length;
+      // Method 1: Try URL-based counting (original method)
+      const encodedName = encodeURIComponent(labelName);
+      const selector = `.gl-label .gl-label-link[href*="label_name=${encodedName}"]`;
+      let count = document.querySelectorAll(selector).length;
+      
+      // Method 2: If URL-based counting fails, try text-based counting
+      if (count === 0) {
+        const matchingSpans = Array.from(document.querySelectorAll(`.gl-label .gl-label-text`))
+          .filter(span => span.textContent.trim() === labelData.text);
+        count = matchingSpans.length;
+        
+        if (count > 0) {
+          console.log(`Using text-based counting for label "${labelData.text}": found ${count} occurrences`);
+        }
+      }
+      
+      // Method 3: If both fail for emoji labels, try alternative URL encoding
+      if (count === 0 && labelData.text.match(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u)) {
+        // Try different encoding methods for emojis
+        const alternativeSelectors = [
+          `.gl-label .gl-label-link[href*="label_name=${escape(labelName)}"]`,
+          `.gl-label .gl-label-link[href*="${labelName}"]`,
+        ];
+        
+        for (const altSelector of alternativeSelectors) {
+          const altCount = document.querySelectorAll(altSelector).length;
+          if (altCount > 0) {
+            count = altCount;
+            console.log(`Using alternative encoding for emoji label "${labelData.text}": selector="${altSelector}", count=${count}`);
+            break;
+          }
+        }
+      }
+      
       labelData.count = count;
+      
+      // Debug logging for emoji labels
+      if (labelData.text.match(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u)) {
+        console.log(`Final count for emoji label "${labelData.text}": ${count}`);
+      }
     });
 
     // Filter out labels with zero count and sort by count (descending) then by name
@@ -2585,14 +2624,49 @@
     renderKanbanBoard(kanbanBoard);
   }
 
+  function createDefaultProfile(allLabels) {
+    // Filter out alternative assignee labels and sort by count
+    const altAssigneePrefix = loadAlternativeAssigneePrefix();
+    const regularLabels = allLabels
+      .filter(label => !label.name.startsWith(altAssigneePrefix))
+      .sort((a, b) => b.count - a.count); // Sort by count descending
+    
+    // Take top 4 labels for the default profile
+    const topLabels = regularLabels.slice(0, 4).map(label => label.name);
+    
+    if (topLabels.length === 0) {
+      return null; // No labels available
+    }
+    
+    const profileId = `default_${Date.now()}`;
+    return {
+      id: profileId,
+      title: "DEFAULT",
+      labels: topLabels
+    };
+  }
+
   function renderKanbanBoard(kanbanBoard) {
     const profiles = loadKanbanProfiles();
     const activeProfileId = loadActiveKanbanProfile();
     const config = loadKanbanConfig();
     const allLabels = extractLabels();  
     
-    // If no profiles exist, show empty state
+    // If no profiles exist, create a default profile with top labels
     if (Object.keys(profiles).length === 0) {
+      const defaultProfile = createDefaultProfile(allLabels);
+      if (defaultProfile) {
+        profiles[defaultProfile.id] = defaultProfile;
+        saveKanbanProfiles(profiles);
+        saveActiveKanbanProfile(defaultProfile.id);
+        console.log(`Auto-created DEFAULT profile with ${defaultProfile.labels.length} top labels:`, defaultProfile.labels.join(', '));
+        
+        // Re-render with the new profile
+        renderKanbanBoard(kanbanBoard);
+        return;
+      }
+      
+      // No labels available, show empty state
       kanbanBoard.innerHTML = `
         <div class="gl-card kanban-header">
           <div class="gl-card-header">

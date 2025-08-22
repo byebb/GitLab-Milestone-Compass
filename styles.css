@@ -856,7 +856,7 @@ body {
 
 .kanban-empty-content h4 {
     margin: 0 0 12px 0;
-    color: var(--gl-text-color, #303030);
+    color: #ddd;
     font-size: 18px;
     font-weight: 600;
 }
