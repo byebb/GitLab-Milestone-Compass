@@ -11,9 +11,34 @@
   }
 
   function init() {
-    // Check if we're on a milestone page with issues
-    const milestoneContent = document.querySelector(".milestone-content");
-    if (!milestoneContent) return;
+    // Check if we're on a milestone page with issues (support multiple GitLab versions)
+    const milestoneContent = document.querySelector(".milestone-content") || 
+                            document.querySelector("[data-testid='milestone-content']") ||
+                            document.querySelector(".milestone-detail") ||
+                            document.querySelector("#tab-issues") ||
+                            document.querySelector(".detail-page-description.milestone-detail") ||
+                            document.querySelector("[id*='milestone']") ||
+                            document.querySelector(".js-milestone-tabs");
+    
+    console.log("GitLab Milestone Compass: Checking milestone page...");
+    console.log("URL:", window.location.href);
+    console.log("Milestone content found:", !!milestoneContent);
+    console.log("Tab issues found:", !!document.querySelector("#tab-issues"));
+    console.log("Milestone detail found:", !!document.querySelector(".milestone-detail"));
+    console.log("Work items lists found:", document.querySelectorAll("[id*='work_items-list']").length);
+    
+    if (!milestoneContent) {
+      console.log("GitLab Milestone Compass: No milestone content found. Available elements:", 
+        {
+          tabIssues: !!document.querySelector("#tab-issues"),
+          milestoneDetail: !!document.querySelector(".milestone-detail"),
+          workItemsLists: document.querySelectorAll("[id*='work_items-list']").length,
+          milestoneClasses: Array.from(document.querySelectorAll("*")).map(el => el.className).filter(c => c && c.includes('milestone')).slice(0, 5)
+        });
+      return;
+    }
+    
+    console.log("GitLab Milestone Compass: Initializing on milestone page");
 
     // Wait a bit for dynamic content to load
     setTimeout(() => {
@@ -413,14 +438,38 @@
       );
     }, 10);
 
-    // Insert filter at the top of the milestone content
-    const milestoneContent = document.querySelector(".milestone-content");
-    if (milestoneContent) {
-      milestoneContent.insertBefore(
-        filterContainer,
-        milestoneContent.firstChild
-      );
+    // Insert filter at the top of the milestone content (support multiple GitLab structures)
+    let insertionPoint = null;
+    let insertMode = "prepend"; // or "before"
+    
+    // Method 1: Original GitLab structure
+    insertionPoint = document.querySelector(".milestone-content");
+    if (insertionPoint) {
+      insertionPoint.insertBefore(filterContainer, insertionPoint.firstChild);
+    } else {
+      // Method 2: GitLab.com structure - insert before the tab content
+      insertionPoint = document.querySelector("#tab-issues");
+      if (insertionPoint) {
+        insertionPoint.parentNode.insertBefore(filterContainer, insertionPoint);
+      } else {
+        // Method 3: Insert before work items lists
+        insertionPoint = document.querySelector('[id*="work_items-list"]');
+        if (insertionPoint) {
+          const container = insertionPoint.closest('.row, .gl-mt-3') || insertionPoint.parentNode;
+          container.insertBefore(filterContainer, container.firstChild);
+        } else {
+          // Method 4: Fallback - insert after milestone detail
+          insertionPoint = document.querySelector(".milestone-detail, .detail-page-description");
+          if (insertionPoint) {
+            insertionPoint.parentNode.insertBefore(filterContainer, insertionPoint.nextSibling);
+          } else {
+            console.log("GitLab Milestone Compass: Could not find insertion point for filter container");
+          }
+        }
+      }
     }
+    
+    console.log("GitLab Milestone Compass: Inserted filter container using:", insertionPoint ? insertionPoint.className || insertionPoint.tagName : "none");
 
     // Add toggle buttons to the page header
     addToggleButtons(filterContainer);
@@ -439,7 +488,7 @@
     const assignees = new Map(); // Use Map to avoid duplicates
     const altAssigneePrefix = loadAlternativeAssigneePrefix();
 
-    // Find all assignee icons across all issue lists
+    // Method 1: Find all assignee icons across all issue lists (original GitLab structure)
     const assigneeIcons = document.querySelectorAll(
       '.assignee-icon a[title*="Assigned to"]'
     );
@@ -472,6 +521,60 @@
         }
       }
     });
+
+    // Method 2: GitLab.com structure - find assignees in work item lists
+    const workItemLists = document.querySelectorAll('[id*="work_items-list"]');
+    workItemLists.forEach((list) => {
+      const issues = list.querySelectorAll('li.\\!gl-border-b-section , li[class*="border"]');
+      issues.forEach((issue) => {
+        // GitLab.com structure: Look for assignee icons within assignee-icon spans
+        const assigneeIcons = issue.querySelectorAll('.assignee-icon a img, .assignee-icon img');
+        
+        assigneeIcons.forEach((img) => {
+          // Extract name from title attribute (e.g., "Assigned to Matthias Miller")
+          const title = img.getAttribute('title');
+          const avatarSrc = img.getAttribute('src');
+          
+          if (title && avatarSrc) {
+            let name = null;
+            
+            // Try to extract name from title
+            const assignedToMatch = title.match(/Assigned to (.+)/);
+            if (assignedToMatch) {
+              name = assignedToMatch[1];
+            } else {
+              // Fallback: use alt attribute if available
+              name = img.getAttribute('alt');
+            }
+            
+            if (name && !assignees.has(name)) {
+              // Try to find assignee ID from parent link
+              const parentLink = img.closest('a');
+              const href = parentLink ? parentLink.getAttribute('href') : null;
+              const idMatch = href ? href.match(/assignee_id=(\d+)/) : null;
+              const assigneeId = idMatch ? idMatch[1] : null;
+
+              assignees.set(name, {
+                name: name,
+                avatar: avatarSrc,
+                id: assigneeId,
+                link: href,
+                isAlternative: false,
+              });
+              
+              console.log("GitLab Milestone Compass: Found assignee:", name, "with ID:", assigneeId);
+            }
+          }
+        });
+      });
+    });
+
+    console.log("GitLab Milestone Compass: Found", assignees.size, "regular assignees");
+    console.log("GitLab Milestone Compass: Work item lists found:", document.querySelectorAll('[id*="work_items-list"]').length);
+    console.log("GitLab Milestone Compass: Issues in work item lists:", document.querySelectorAll('[id*="work_items-list"] li').length);
+    console.log("GitLab Milestone Compass: Assignee icon elements found:", document.querySelectorAll('.assignee-icon img').length);
+    console.log("GitLab Milestone Compass: All assignee-related elements:", 
+      Array.from(document.querySelectorAll('.assignee-icon')).map(el => el.innerHTML));
 
     // Extract alternative assignees from labels with the configured prefix
     const labelElements = document.querySelectorAll(".gl-label .gl-label-link");
@@ -507,12 +610,19 @@
       }
     });
 
-    return Array.from(assignees.values()).sort((a, b) => {
+    const finalAssignees = Array.from(assignees.values()).sort((a, b) => {
       // Sort regular assignees first, then alternative assignees
       if (a.isAlternative && !b.isAlternative) return 1;
       if (!a.isAlternative && b.isAlternative) return -1;
       return a.name.localeCompare(b.name);
     });
+    
+    console.log("GitLab Milestone Compass: Final assignees found:", finalAssignees.length);
+    finalAssignees.forEach(assignee => {
+      console.log(`  - ${assignee.name} (${assignee.isAlternative ? 'alternative' : 'regular'})`);
+    });
+    
+    return finalAssignees;
   }
 
   function extractLabels() {
@@ -1023,6 +1133,8 @@
   function handleAssigneeSelection(assigneeItem, labels) {
     const assigneeName = assigneeItem.getAttribute("data-assignee-name");
 
+    console.log(`GitLab Milestone Compass: Assignee clicked: "${assigneeName}"`);
+
     // Toggle selection
     const isSelected = assigneeItem.classList.contains("selected");
 
@@ -1030,20 +1142,35 @@
       // Deselect assignee
       assigneeItem.classList.remove("selected");
       currentFilters.assignee = null;
+      console.log("GitLab Milestone Compass: Deselected assignee, cleared filter");
     } else {
       // Clear previous assignee selection and select this one
       clearAssigneeSelections();
       assigneeItem.classList.add("selected");
       currentFilters.assignee = assigneeName;
+      console.log(`GitLab Milestone Compass: Selected assignee: "${assigneeName}"`);
     }
 
     // Don't clear the title search - keep it active and combine with assignee filter
     // clearTitleSearch(); // REMOVED THIS LINE
 
+    // Check if Kanban board is active
+    const kanbanBoard = document.querySelector("#kanban-board");
+    const isKanbanActive = kanbanBoard && kanbanBoard.style.display !== "none";
+
+    if (isKanbanActive) {
+      // Apply Kanban filters and update counts
+      applyKanbanFilters();
+      console.log(`GitLab Milestone Compass: Applied Kanban filters after assignee selection: ${currentFilters.assignee}`);
+    } else {
     // Apply combined filtering and update label counts
+      console.log("GitLab Milestone Compass: Applying combined filtering...");
     applyCombinedFiltering();
-    updateLabelCounts(labels);
     updateFilterButtons();
+    }
+    
+    // Always update label counts regardless of view
+    updateLabelCounts(labels);
 
     // Save applied filters to localStorage
     saveAppliedFilters(currentFilters.assignee, currentFilters.labels);
@@ -1072,11 +1199,23 @@
     // Don't clear the title search - keep it active and combine with label filter
     // clearTitleSearch(); // REMOVED THIS LINE
 
+    // Check if Kanban board is active
+    const kanbanBoard = document.querySelector("#kanban-board");
+    const isKanbanActive = kanbanBoard && kanbanBoard.style.display !== "none";
+
+    if (isKanbanActive) {
+      // Apply Kanban filters and update counts
+      applyKanbanFilters();
+      console.log(`GitLab Milestone Compass: Applied Kanban filters after label selection: ${currentFilters.labels.join(', ')}`);
+    } else {
     // Apply combined filtering and update assignee counts
     applyCombinedFiltering();
     updateAssigneeCounts(assignees);
-    updateLabelCounts(extractLabels()); // Update label counts too
     updateFilterButtons();
+    }
+    
+    // Always update label counts regardless of view
+    updateLabelCounts(extractLabels());
 
     // Save applied filters to localStorage
     saveAppliedFilters(currentFilters.assignee, currentFilters.labels);
@@ -1097,12 +1236,24 @@
     // Don't clear the title search - keep it active and combine with reset labels
     // clearTitleSearch(); // REMOVED THIS LINE
 
+    // Check if Kanban board is active
+    const kanbanBoard = document.querySelector("#kanban-board");
+    const isKanbanActive = kanbanBoard && kanbanBoard.style.display !== "none";
+
+    if (isKanbanActive) {
+      // Apply Kanban filters and update counts
+      applyKanbanFilters();
+      console.log(`GitLab Milestone Compass: Applied Kanban filters after label reset`);
+    } else {
     // Apply filtering and update counts
     applyCombinedFiltering();
     updateAssigneeCounts(assignees);
-    updateLabelCounts(labels);
     updateSectionCounts();
     updateFilterButtons();
+    }
+    
+    // Always update label counts regardless of view
+    updateLabelCounts(labels);
 
     // Save cleared filters to localStorage
     saveAppliedFilters(currentFilters.assignee, currentFilters.labels);
@@ -1254,29 +1405,44 @@
   }
 
   function applyCombinedFiltering() {
-    const allIssues = document.querySelectorAll(".issuable-row");
+    // Support multiple GitLab DOM structures
+    const allIssues = document.querySelectorAll('.issuable-row, li.\\!gl-border-b-section, li[class*="border"]');
     const searchInput = document.getElementById("issue-title-search");
     const hasActiveSearch = searchInput && searchInput.value.trim() !== "";
+
+    console.log("GitLab Milestone Compass: Filtering", allIssues.length, "issues");
+    console.log(`GitLab Milestone Compass: Current filters:`, {
+      assignee: currentFilters.assignee,
+      labels: currentFilters.labels,
+      titleSearch: currentFilters.titleSearch
+    });
 
     allIssues.forEach((issue) => {
       let matches = true;
 
       // First check if issue matches search term (if any)
       if (hasActiveSearch) {
-        // Look for the issue title in the correct location based on HTML structure
+        let title = "";
+        
+        // Strategy 1: GitLab.com structure - look for main issue link
+        const gitlabComTitle = issue.querySelector('a.gl-text-default.gl-break-words');
+        if (gitlabComTitle) {
+          title = (gitlabComTitle.getAttribute('title') || gitlabComTitle.textContent || '').toLowerCase();
+        } else {
+          // Strategy 2: Original GitLab structure
         const titleElement = issue.querySelector("span > a[title]");
         if (titleElement) {
-          const title = titleElement.getAttribute("title").toLowerCase();
-          const searchTerm = searchInput.value.toLowerCase();
-          const searchMatches = title.includes(searchTerm);
-          if (!searchMatches) {
-            matches = false;
-          }
+            title = titleElement.getAttribute("title").toLowerCase();
         } else {
-          // Fallback: try to find any text content in the first span
+            // Strategy 3: Fallback - try to find any text content in the first span
           const firstSpan = issue.querySelector("span");
           if (firstSpan) {
-            const title = firstSpan.textContent.toLowerCase();
+              title = firstSpan.textContent.toLowerCase();
+            }
+          }
+        }
+        
+        if (title) {
             const searchTerm = searchInput.value.toLowerCase();
             const searchMatches = title.includes(searchTerm);
             if (!searchMatches) {
@@ -1285,20 +1451,31 @@
           } else {
             // No title found - hide the issue
             matches = false;
-          }
         }
       }
 
       // Then check assignee filter (including alternative assignees)
       if (matches && currentFilters.assignee) {
-        const assigneeIcon = issue.querySelector(
-          '.assignee-icon a[title*="Assigned to"]'
-        );
-        const normalAssigneeMatches =
-          assigneeIcon &&
-          assigneeIcon
-            .getAttribute("title")
-            .includes(`Assigned to ${currentFilters.assignee}`);
+        let normalAssigneeMatches = false;
+        
+        // Method 1: Original GitLab structure
+        const assigneeIcon = issue.querySelector('.assignee-icon a[title*="Assigned to"]');
+        if (assigneeIcon) {
+          normalAssigneeMatches = assigneeIcon.getAttribute("title").includes(`Assigned to ${currentFilters.assignee}`);
+        }
+        
+        // Method 2: GitLab.com structure - look for assignee images within assignee-icon spans
+        if (!normalAssigneeMatches) {
+          const assigneeImages = issue.querySelectorAll('.assignee-icon a img, .assignee-icon img');
+          normalAssigneeMatches = Array.from(assigneeImages).some(img => {
+            const title = img.getAttribute('title');
+            const alt = img.getAttribute('alt');
+            
+            // Check both title and alt attributes for the assignee name
+            return (title && title.includes(`Assigned to ${currentFilters.assignee}`)) ||
+                   (alt && alt === currentFilters.assignee);
+          });
+        }
         
         // Check for alternative assignee labels
         const altAssigneePrefix = loadAlternativeAssigneePrefix();
@@ -1309,7 +1486,20 @@
           return labelSpan && labelSpan.textContent.trim() === expectedAltLabel;
         });
 
-        if (!normalAssigneeMatches && !alternativeAssigneeMatches) matches = false;
+        console.log(`GitLab Milestone Compass: Checking assignee filter for "${currentFilters.assignee}" - normalMatch: ${normalAssigneeMatches}, altMatch: ${alternativeAssigneeMatches}`);
+        
+        if (!normalAssigneeMatches && !alternativeAssigneeMatches) {
+          matches = false;
+          console.log(`GitLab Milestone Compass: Issue FILTERED OUT (no assignee match)`, {
+            issueTitle: issue.querySelector('a.gl-text-default, span > a[title]')?.textContent?.trim() || 'No title',
+            expectedAssignee: currentFilters.assignee
+          });
+        } else {
+          console.log(`GitLab Milestone Compass: Issue MATCHES assignee filter`, {
+            issueTitle: issue.querySelector('a.gl-text-default, span > a[title]')?.textContent?.trim() || 'No title',
+            assignee: currentFilters.assignee
+          });
+        }
       }
 
       // Then check label filters (AND logic - issue must have ALL selected labels)
@@ -1344,9 +1534,11 @@
         if (hasActiveSearch) {
           issue.classList.add("search-visible");
         }
+        console.log(`GitLab Milestone Compass: Issue SHOWN:`, issue.querySelector('a.gl-text-default, span > a[title]')?.textContent?.trim() || 'No title');
       } else {
         issue.style.display = "none";
         issue.classList.remove("filtered-visible", "search-visible");
+        console.log(`GitLab Milestone Compass: Issue HIDDEN:`, issue.querySelector('a.gl-text-default, span > a[title]')?.textContent?.trim() || 'No title');
       }
     });
 
@@ -1503,6 +1695,10 @@
   }
 
   function updateLabelCounts(labels) {
+    // Check if Kanban board is active
+    const kanbanBoard = document.querySelector("#kanban-board");
+    const isKanbanActive = kanbanBoard && kanbanBoard.style.display !== "none";
+    
     labels.forEach((label) => {
       const labelItem = document.querySelector(
         `[data-label-name="${label.name}"]`
@@ -1512,40 +1708,48 @@
         if (countSpan) {
           let count;
 
-          // Check if there's an active search
-          const searchInput = document.getElementById("issue-title-search");
-          const hasActiveSearch =
-            searchInput && searchInput.value.trim() !== "";
-
-          // If this label is already selected, show its original count
-          if (currentFilters.labels.includes(label.name)) {
-            count = getFilteredIssueCountWithMultipleLabels(
-              label.name,
-              currentFilters.assignee,
-              currentFilters.labels
-            );
-          } else if (
-            currentFilters.assignee ||
-            currentFilters.labels.length > 0
-          ) {
-            // Count issues that have this label AND the current filters
-            count = getFilteredIssueCountWithMultipleLabels(
-              label.name,
-              currentFilters.assignee,
-              currentFilters.labels
-            );
-          } else {
+          if (isKanbanActive) {
+            // For Kanban view: use the original label count (don't recount from cards)
+            // This prevents circular dependency with filtering
             count = label.count;
-          }
+            console.log(`GitLab Milestone Compass: [updateLabelCounts] Kanban mode - Using original count for "${label.name}": ${count}`);
+          } else {
+            // For main view: use existing logic
+            // Check if there's an active search
+            const searchInput = document.getElementById("issue-title-search");
+            const hasActiveSearch =
+              searchInput && searchInput.value.trim() !== "";
 
-          // If there's an active search, further filter by search term
-          if (hasActiveSearch) {
-            count = getFilteredIssueCountWithSearch(
-              label.name,
-              currentFilters.assignee,
-              currentFilters.labels,
-              searchInput.value
-            );
+            // If this label is already selected, show its original count
+            if (currentFilters.labels.includes(label.name)) {
+              count = getFilteredIssueCountWithMultipleLabels(
+                label.name,
+                currentFilters.assignee,
+                currentFilters.labels
+              );
+            } else if (
+              currentFilters.assignee ||
+              currentFilters.labels.length > 0
+            ) {
+              // Count issues that have this label AND the current filters
+              count = getFilteredIssueCountWithMultipleLabels(
+                label.name,
+                currentFilters.assignee,
+                currentFilters.labels
+              );
+            } else {
+              count = label.count;
+            }
+
+            // If there's an active search, further filter by search term
+            if (hasActiveSearch) {
+              count = getFilteredIssueCountWithSearch(
+                label.name,
+                currentFilters.assignee,
+                currentFilters.labels,
+                searchInput.value
+              );
+            }
           }
 
           countSpan.textContent = `(${count})`;
@@ -1554,7 +1758,7 @@
           const hasActiveFilters =
             currentFilters.assignee ||
             currentFilters.labels.length > 0 ||
-            hasActiveSearch;
+            (document.getElementById("issue-title-search")?.value.trim() !== "");
           const isSelectedLabel = currentFilters.labels.includes(label.name);
 
           // Hide the label if it has zero count and there are active filters (unless it's selected)
@@ -1716,7 +1920,7 @@
     if (searchInput && searchResultsCount) {
       if (searchInput.value.trim() !== "") {
         const totalVisibleIssues = document.querySelectorAll(
-          '.issuable-row:not([style*="display: none"])'
+          '.issuable-row:not([style*="display: none"]), li.\\!gl-border-b-section:not([style*="display: none"]), li[class*="border"]:not([style*="display: none"])'
         ).length;
         if (totalVisibleIssues === 0) {
           searchResultsCount.textContent = "No issues found";
@@ -1738,16 +1942,33 @@
 
   // Helper functions for counting issues
   function getTotalIssueCount() {
-    return document.querySelectorAll(".issuable-row").length;
+    const totalCount = document.querySelectorAll('.issuable-row, li.\\!gl-border-b-section, li[class*="border"]').length;
+    console.log(`GitLab Milestone Compass: Total issue count: ${totalCount}`);
+    return totalCount;
   }
 
   function getUnassignedIssueCount() {
-    return (
-      document.querySelectorAll(".issuable-row").length -
-      document.querySelectorAll(
-        '.issuable-row .assignee-icon a[title*="Assigned to"]'
-      ).length
-    );
+    const allIssues = document.querySelectorAll('.issuable-row, li.\\!gl-border-b-section, li[class*="border"]');
+    let assignedCount = 0;
+    
+    allIssues.forEach((issue) => {
+      // Method 1: Original GitLab structure
+      const assigneeIcon = issue.querySelector('.assignee-icon a[title*="Assigned to"]');
+      if (assigneeIcon) {
+        assignedCount++;
+        return;
+      }
+      
+      // Method 2: GitLab.com structure - check for any assignee images
+      const assigneeImages = issue.querySelectorAll('.assignee-icon img');
+      if (assigneeImages.length > 0) {
+        assignedCount++;
+      }
+    });
+    
+    const unassignedCount = allIssues.length - assignedCount;
+    console.log(`GitLab Milestone Compass: Unassigned issue count: ${unassignedCount} (total: ${allIssues.length}, assigned: ${assignedCount})`);
+    return unassignedCount;
   }
 
   function getIssueCountForAssignee(assigneeName, isAlternative = false) {
@@ -1756,10 +1977,10 @@
       const altAssigneePrefix = loadAlternativeAssigneePrefix();
       const expectedAltLabel = `${altAssigneePrefix}${assigneeName}`;
       
-      const issues = document.querySelectorAll(".issuable-row");
-      let count = 0;
-      
-      issues.forEach((issue) => {
+      const issues = document.querySelectorAll('.issuable-row, li.\\!gl-border-b-section, li[class*="border"]');
+    let count = 0;
+
+    issues.forEach((issue) => {
         const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
         const hasAltAssigneeLabel = Array.from(labelLinks).some((link) => {
           const labelSpan = link.querySelector(".gl-label-text");
@@ -1771,25 +1992,56 @@
       
       return count;
     } else {
-    return document.querySelectorAll(
-      `.issuable-row .assignee-icon a[title="Assigned to ${assigneeName}"]`
-    ).length;
+      // Support both GitLab DOM structures
+      const issues = document.querySelectorAll('.issuable-row, li.\\!gl-border-b-section, li[class*="border"]');
+      let count = 0;
+      
+      issues.forEach((issue) => {
+        // Method 1: Original GitLab structure
+        const assigneeIcon = issue.querySelector(`.assignee-icon a[title="Assigned to ${assigneeName}"]`);
+        if (assigneeIcon) {
+          count++;
+          return;
+        }
+        
+        // Method 2: GitLab.com structure
+        const assigneeImages = issue.querySelectorAll('.assignee-icon img');
+        const hasAssignee = Array.from(assigneeImages).some(img => 
+          img.getAttribute('title') === `Assigned to ${assigneeName}` ||
+          img.getAttribute('alt') === assigneeName
+        );
+        
+        if (hasAssignee) count++;
+      });
+      
+      console.log(`GitLab Milestone Compass: Counted ${count} issues for assignee "${assigneeName}"`);
+      return count;
     }
   }
 
   function getFilteredIssueCountForAssignee(assigneeName, labelName) {
-    const issues = document.querySelectorAll(".issuable-row");
+    const issues = document.querySelectorAll('.issuable-row, li.\\!gl-border-b-section, li[class*="border"]');
     let count = 0;
 
     issues.forEach((issue) => {
-      const assigneeIcon = issue.querySelector(
-        '.assignee-icon a[title*="Assigned to"]'
-      );
-      const hasAssignee =
-        assigneeIcon &&
-        assigneeIcon
-          .getAttribute("title")
-          .includes(`Assigned to ${assigneeName}`);
+      let hasAssignee = false;
+      
+      // Method 1: Original GitLab structure
+      const assigneeIcon = issue.querySelector('.assignee-icon a[title*="Assigned to"]');
+      if (assigneeIcon) {
+        hasAssignee = assigneeIcon.getAttribute("title").includes(`Assigned to ${assigneeName}`);
+      }
+      
+      // Method 2: GitLab.com structure
+      if (!hasAssignee) {
+        const assigneeImages = issue.querySelectorAll('.assignee-icon a img, .assignee-icon img');
+        hasAssignee = Array.from(assigneeImages).some(img => {
+          const title = img.getAttribute('title');
+          const alt = img.getAttribute('alt');
+          return (title && title.includes(`Assigned to ${assigneeName}`)) ||
+                 (alt && alt === assigneeName);
+        });
+      }
 
       if (hasAssignee) {
         const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
@@ -2526,35 +2778,17 @@
     // Ensure status sections are hidden
     hideStatusSections();
     
-    // Show or create the Kanban board
-    createKanbanBoard();
+    // Show or create the Kanban board with a delay to ensure DOM is ready
+    console.log("GitLab Milestone Compass: [showKanbanView] About to create Kanban board...");
     
-    // Apply Kanban filters and highlighting (with delay to ensure cards are rendered)
+    // Add a small delay to ensure DOM elements are fully rendered
     setTimeout(() => {
-      // Ensure search state is transferred to Kanban view
-      const searchInput = document.getElementById("issue-title-search");
-      
-      // Use persistent search state if available
-      if (persistentSearchState && persistentSearchState.trim() !== "") {
-        currentFilters.titleSearch = persistentSearchState;
-        if (searchInput) {
-          searchInput.value = persistentSearchState; // Restore the search input value
-        }
-      } else if (currentFilters.titleSearch && currentFilters.titleSearch.trim() !== "") {
-        if (searchInput) {
-          searchInput.value = currentFilters.titleSearch; // Restore the search input value
-        }
-      } else if (searchInput && searchInput.value.trim() !== "") {
-        currentFilters.titleSearch = searchInput.value;
-        persistentSearchState = searchInput.value;
-      }
-      
-      applyKanbanFilters();
-      
-      if (searchInput && searchInput.value.trim() !== "") {
-        highlightKanbanSearchMatches(searchInput.value.trim());
-      }
-    }, 100);
+      console.log("GitLab Milestone Compass: [showKanbanView] Creating Kanban board after delay...");
+      createKanbanBoard(0); // Start with retry count 0
+    }, 200);
+    
+    // Note: Filter application is now handled within renderKanbanBoard() to avoid race conditions
+    console.log("GitLab Milestone Compass: [showKanbanView] Kanban view setup complete - filters will be applied by renderKanbanBoard()");
   }
 
   function showStatusView() {    
@@ -2572,18 +2806,52 @@
   }
 
   function hideStatusSections() {
-    const sections = document.querySelectorAll("#issues-list-unassigned, #issues-list-ongoing, #issues-list-closed");
+    // Support both GitLab structures
+    const sections = document.querySelectorAll("#issues-list-unassigned, #issues-list-ongoing, #issues-list-closed, #work_items-list-unassigned, #work_items-list-ongoing, #work_items-list-closed");
     sections.forEach(section => {
       const card = section.closest(".gl-card");
       if (card) card.style.display = "none";
     });
+    
+    // For GitLab.com: Also hide the entire row container
+    const rowContainer = document.querySelector("#tab-issues .row.gl-mt-3");
+    if (rowContainer) {
+      rowContainer.style.display = "none";
+      console.log("GitLab Milestone Compass: Hidden default status view (GitLab.com structure)");
+    }
+    
+    // For original GitLab: Hide milestone content rows
+    const milestoneRows = document.querySelectorAll(".milestone-content .row");
+    milestoneRows.forEach(row => {
+      if (row.querySelector("#issues-list-unassigned, #issues-list-ongoing, #issues-list-closed")) {
+        row.style.display = "none";
+        console.log("GitLab Milestone Compass: Hidden default status view (original GitLab structure)");
+      }
+    });
   }
 
   function showStatusSections() {
-    const sections = document.querySelectorAll("#issues-list-unassigned, #issues-list-ongoing, #issues-list-closed");
+    // Support both GitLab structures
+    const sections = document.querySelectorAll("#issues-list-unassigned, #issues-list-ongoing, #issues-list-closed, #work_items-list-unassigned, #work_items-list-ongoing, #work_items-list-closed");
     sections.forEach(section => {
       const card = section.closest(".gl-card");
       if (card) card.style.display = "block";
+    });
+    
+    // For GitLab.com: Show the entire row container
+    const rowContainer = document.querySelector("#tab-issues .row.gl-mt-3");
+    if (rowContainer) {
+      rowContainer.style.display = "flex";
+      console.log("GitLab Milestone Compass: Shown default status view (GitLab.com structure)");
+    }
+    
+    // For original GitLab: Show milestone content rows
+    const milestoneRows = document.querySelectorAll(".milestone-content .row");
+    milestoneRows.forEach(row => {
+      if (row.querySelector("#issues-list-unassigned, #issues-list-ongoing, #issues-list-closed")) {
+        row.style.display = "flex";
+        console.log("GitLab Milestone Compass: Shown default status view (original GitLab structure)");
+      }
     });
   }
 
@@ -2594,7 +2862,32 @@
     }
   }
 
-  function createKanbanBoard() {    
+  function createKanbanBoard(retryCount = 0) {    
+    console.log(`GitLab Milestone Compass: [createKanbanBoard] Starting Kanban board creation (attempt ${retryCount + 1})...`);
+    
+    // Check if required DOM elements exist
+    const filterContainer = document.querySelector(".milestone-assignee-filter");
+    const hasIssues = document.querySelectorAll('.issuable-row, li.\\!gl-border-b-section, li[class*="border"]').length > 0;
+    
+    if (!filterContainer && retryCount < 5) {
+      console.log("GitLab Milestone Compass: [createKanbanBoard] Filter container not found, retrying in 300ms...");
+      setTimeout(() => createKanbanBoard(retryCount + 1), 300);
+      return;
+    }
+    
+    if (!hasIssues && retryCount < 5) {
+      console.log("GitLab Milestone Compass: [createKanbanBoard] No issues found, retrying in 300ms...");
+      setTimeout(() => createKanbanBoard(retryCount + 1), 300);
+      return;
+    }
+    
+    if (retryCount >= 5) {
+      console.log("GitLab Milestone Compass: [createKanbanBoard] Max retries reached, giving up...");
+      return;
+    }
+    
+    console.log("GitLab Milestone Compass: [createKanbanBoard] DOM ready, proceeding with board creation...");
+    
     // Build issue status mapping for reliable status detection
     buildIssueStatusMap();
     
@@ -2621,7 +2914,9 @@
     }
     
     kanbanBoard.style.display = "block";
+    console.log("GitLab Milestone Compass: [createKanbanBoard] About to call renderKanbanBoard...");
     renderKanbanBoard(kanbanBoard);
+    console.log("GitLab Milestone Compass: [createKanbanBoard] renderKanbanBoard completed.");
   }
 
   function createDefaultProfile(allLabels) {
@@ -2647,10 +2942,14 @@
   }
 
   function renderKanbanBoard(kanbanBoard) {
+    console.log("GitLab Milestone Compass: [renderKanbanBoard] Function called, starting render...");
+    
     const profiles = loadKanbanProfiles();
     const activeProfileId = loadActiveKanbanProfile();
     const config = loadKanbanConfig();
-    const allLabels = extractLabels();  
+    const allLabels = extractLabels();
+    
+    console.log("GitLab Milestone Compass: [renderKanbanBoard] Config loaded:", { profilesCount: Object.keys(profiles).length, activeProfileId, configLabels: config, labelsCount: allLabels.length });  
     
     // If no profiles exist, create a default profile with top labels
     if (Object.keys(profiles).length === 0) {
@@ -2735,6 +3034,15 @@
       return `<span class="kanban-profile-chip ${isActive ? 'active' : ''}" data-profile-id="${profile.id}">${profile.title}</span>`;
     }).join('');
     
+    const columnsHTML = renderKanbanColumns(config, allLabels);
+    console.log(`GitLab Milestone Compass: Rendered Kanban columns HTML length:`, columnsHTML.length);
+    console.log(`GitLab Milestone Compass: Columns HTML preview:`, columnsHTML.substring(0, 200) + '...');
+    
+    if (columnsHTML.length === 0) {
+      console.log(`GitLab Milestone Compass: ERROR: No columns HTML generated!`);
+      return;
+    }
+    
     kanbanBoard.innerHTML = `
       <div class="gl-card kanban-header">
         <div class="gl-card-header">
@@ -2766,9 +3074,28 @@
         </div>
       </div>
       <div class="kanban-columns-container">
-        ${renderKanbanColumns(config, allLabels)}
+        ${columnsHTML}
       </div>
     `;
+    
+    console.log(`GitLab Milestone Compass: Kanban board HTML set. Checking container...`);
+    const columnsContainer = kanbanBoard.querySelector('.kanban-columns-container');
+    console.log(`GitLab Milestone Compass: Columns container found:`, !!columnsContainer);
+    if (columnsContainer) {
+      const columns = columnsContainer.querySelectorAll('.kanban-column');
+      console.log(`GitLab Milestone Compass: Columns in DOM:`, columns.length);
+      columns.forEach((col, index) => {
+        const header = col.querySelector('.kanban-column-header span');
+        const cards = col.querySelectorAll('.kanban-card');
+        console.log(`GitLab Milestone Compass: Column ${index + 1}: "${header?.textContent}" with ${cards.length} cards`);
+      });
+      
+      // Count total cards across all columns
+      const totalCards = columnsContainer.querySelectorAll('.kanban-card');
+      console.log(`GitLab Milestone Compass: Total cards in DOM immediately after HTML set:`, totalCards.length);
+    } else {
+      console.log(`GitLab Milestone Compass: ERROR: Columns container not found in DOM!`);
+    }
     
     // Add configure button handler
     kanbanBoard.querySelector(".configure-kanban-btn").addEventListener("click", () => {
@@ -2803,13 +3130,17 @@
       }
       
       // Apply initial filters (always run to ensure correct visibility)
-      applyKanbanFilters();
+      // Add small delay to ensure DOM has been updated with the new HTML
+      setTimeout(() => {
+        console.log("GitLab Milestone Compass: [renderKanbanBoard] Applying filters after DOM update...");
+        applyKanbanFilters();
+      }, 50);
       
       // Apply initial search highlighting if there's an active search
       if (searchInput && searchInput.value.trim() !== "") {
         setTimeout(() => {
           highlightKanbanSearchMatches(searchInput.value.trim());
-        }, 100);
+        }, 150); // Increased to account for the 50ms filter delay
       }
     }
     
@@ -2824,6 +3155,23 @@
         switchKanbanProfile(profileId);
       });
     });
+    
+    // Final debug check
+    console.log(`GitLab Milestone Compass: [FINAL CHECK] Kanban board setup complete`);
+    const finalColumnsContainer = kanbanBoard.querySelector('.kanban-columns-container');
+    if (finalColumnsContainer) {
+      const finalColumns = finalColumnsContainer.querySelectorAll('.kanban-column');
+      console.log(`GitLab Milestone Compass: [FINAL CHECK] Final column count in DOM:`, finalColumns.length);
+      console.log(`GitLab Milestone Compass: [FINAL CHECK] Kanban board display style:`, kanbanBoard.style.display);
+      console.log(`GitLab Milestone Compass: [FINAL CHECK] Columns container display style:`, finalColumnsContainer.style.display);
+      finalColumns.forEach((col, index) => {
+        const isHidden = col.style.display === 'none';
+        const headerText = col.querySelector('.kanban-column-header span')?.textContent || 'Unknown';
+        console.log(`GitLab Milestone Compass: [FINAL CHECK] Column ${index + 1} "${headerText}": ${isHidden ? 'HIDDEN' : 'VISIBLE'}`);
+      });
+    } else {
+      console.log(`GitLab Milestone Compass: [FINAL CHECK] ERROR: Columns container not found!`);
+    }
   }
 
   function setupCrossColumnHighlighting(kanbanBoard) {
@@ -2874,21 +3222,37 @@
   }
 
   function renderKanbanColumns(config, allLabels) {
+    console.log(`GitLab Milestone Compass: [renderKanbanColumns] Starting with config:`, config);
+    
     // Get fresh DOM selection every time, but EXCLUDE any existing Kanban cards to prevent duplicates
-    const allIssueElements = document.querySelectorAll(".issuable-row");
+    const allIssueElements = document.querySelectorAll('.issuable-row, li.\\!gl-border-b-section, li[class*="border"]');
     const allIssues = Array.from(allIssueElements).filter(issue => {
       // Exclude any issues that are already in Kanban cards to prevent duplication
       return !issue.classList.contains('kanban-card');
     });
     
+    console.log(`GitLab Milestone Compass: Found ${allIssues.length} issues for Kanban board`);
+    console.log("GitLab Milestone Compass: Issue elements found:", allIssues.map(issue => ({
+      element: issue.tagName + '.' + issue.className,
+      title: issue.querySelector('a.gl-text-default, span > a[title]')?.textContent?.trim() || 'No title',
+      url: issue.querySelector('a[href*="/issues/"]')?.href || 'No URL'
+    })));
+    
     let columns = "";
     let usedIssues = new Set(); // Track issues already placed in columns
     
     // Create columns for configured labels (only if they have issues)
+    console.log(`GitLab Milestone Compass: Kanban config labels:`, config);
+    console.log(`GitLab Milestone Compass: Available labels:`, allLabels.map(l => ({ name: l.name, text: l.text, count: l.count })));
+    
     config.forEach(labelName => {
       const label = allLabels.find(l => l.name === labelName);
+      console.log(`GitLab Milestone Compass: Processing label "${labelName}":`, label ? 'found' : 'NOT FOUND');
+      
       if (label) {
         const issues = getFilteredIssuesForKanbanLabel(labelName, allIssues);
+        console.log(`GitLab Milestone Compass: Issues for label "${labelName}":`, issues.length);
+        
         // Only create column if it has issues
         if (issues.length > 0) {
           columns += createKanbanColumn(label, issues);
@@ -2897,19 +3261,35 @@
             const issueUrl = getIssueUrlFromElement(issue);
             if (issueUrl) {
               usedIssues.add(issueUrl);
+              console.log(`GitLab Milestone Compass: Marked issue as used: ${issueUrl}`);
             }
           });
+          console.log(`GitLab Milestone Compass: Created column for "${labelName}" with ${issues.length} issues. Total used: ${usedIssues.size}`);
+        } else {
+          console.log(`GitLab Milestone Compass: No issues found for label "${labelName}", skipping column`);
         }
+      } else {
+        console.log(`GitLab Milestone Compass: Label "${labelName}" not found in available labels`);
       }
     });
     
-    // Add MISC column for remaining issues (only issues NOT in other columns)
-    const miscIssues = getFilteredMiscIssuesForKanban(config, allIssues, usedIssues);
+    // Add MISC column for ALL issues not in any other column (NO LIMITS)
+    console.log(`GitLab Milestone Compass: [renderKanbanColumns] Creating unlimited MISC column...`);
+    const remainingIssues = allIssues.filter(issue => {
+      const issueUrl = getIssueUrlFromElement(issue);
+      return issueUrl && !usedIssues.has(issueUrl);
+    });
     
-    if (miscIssues.length > 0) {
-      columns += createMiscColumn(miscIssues);
+    console.log(`GitLab Milestone Compass: [renderKanbanColumns] Found ${remainingIssues.length} remaining issues for MISC (NO LIMIT)`);
+    
+    if (remainingIssues.length > 0) {
+      columns += createMiscColumn(remainingIssues);
+      console.log(`GitLab Milestone Compass: [renderKanbanColumns] MISC column created with ALL ${remainingIssues.length} remaining issues`);
     }
     
+    console.log(`GitLab Milestone Compass: [renderKanbanColumns] Generated columns HTML (${columns.length} chars)`);
+    console.log(`GitLab Milestone Compass: [renderKanbanColumns] HTML preview:`, columns.substring(0, 300) + '...');
+    console.log(`GitLab Milestone Compass: [renderKanbanColumns] RETURNING columns HTML now...`);
     return columns;
   }
 
@@ -3144,8 +3524,11 @@
   function buildIssueStatusMap() {
     issueStatusMap.clear();
     
+    console.log("GitLab Milestone Compass: Building issue status map...");
+    
+    // Method 1: Original GitLab structure
     // Map issues from unstarted section
-    const unassignedSection = document.querySelector('#issues-list-unassigned');
+    let unassignedSection = document.querySelector('#issues-list-unassigned');
     if (unassignedSection) {
       const unassignedIssues = unassignedSection.querySelectorAll('.issuable-row');
       unassignedIssues.forEach(issue => {
@@ -3157,7 +3540,7 @@
     }
     
     // Map issues from ongoing section  
-    const ongoingSection = document.querySelector('#issues-list-ongoing');
+    let ongoingSection = document.querySelector('#issues-list-ongoing');
     if (ongoingSection) {
       const ongoingIssues = ongoingSection.querySelectorAll('.issuable-row');
       ongoingIssues.forEach(issue => {
@@ -3169,7 +3552,7 @@
     }
     
     // Map issues from closed section
-    const closedSection = document.querySelector('#issues-list-closed');
+    let closedSection = document.querySelector('#issues-list-closed');
     if (closedSection) {
       const closedIssues = closedSection.querySelectorAll('.issuable-row');
       closedIssues.forEach(issue => {
@@ -3179,6 +3562,48 @@
         }
       });
     }
+    
+    // Method 2: GitLab.com structure with work_items-list
+    // Map issues from unstarted section
+    unassignedSection = document.querySelector('#work_items-list-unassigned');
+    if (unassignedSection) {
+      const unassignedIssues = unassignedSection.querySelectorAll('li');
+      unassignedIssues.forEach(issue => {
+        const link = issue.querySelector('a[href*="/issues/"]');
+        if (link) {
+          issueStatusMap.set(link.href, 'unstarted');
+          console.log("GitLab Milestone Compass: Mapped unstarted issue:", link.href);
+        }
+      });
+    }
+    
+    // Map issues from ongoing section  
+    ongoingSection = document.querySelector('#work_items-list-ongoing');
+    if (ongoingSection) {
+      const ongoingIssues = ongoingSection.querySelectorAll('li');
+      ongoingIssues.forEach(issue => {
+        const link = issue.querySelector('a[href*="/issues/"]');
+        if (link) {
+          issueStatusMap.set(link.href, 'ongoing');
+          console.log("GitLab Milestone Compass: Mapped ongoing issue:", link.href);
+        }
+      });
+    }
+    
+    // Map issues from closed section
+    closedSection = document.querySelector('#work_items-list-closed');
+    if (closedSection) {
+      const closedIssues = closedSection.querySelectorAll('li');
+      closedIssues.forEach(issue => {
+        const link = issue.querySelector('a[href*="/issues/"]');
+        if (link) {
+          issueStatusMap.set(link.href, 'completed');
+          console.log("GitLab Milestone Compass: Mapped completed issue:", link.href);
+        }
+      });
+    }
+    
+    console.log("GitLab Milestone Compass: Issue status map built with", issueStatusMap.size, "issues");
   }
 
   // Helper functions for hide closed issues feature
@@ -3193,8 +3618,24 @@
   }
 
   function applyKanbanFilters() {
+    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Starting to apply filters...`);
+    
     const hideClosedState = loadHideClosedState();
     const kanbanCards = document.querySelectorAll('.kanban-card');
+    
+    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Found ${kanbanCards.length} cards, hideClosedState: ${hideClosedState}`);
+    
+    // Debug: Check if kanban board exists in DOM
+    const kanbanBoard = document.querySelector('#kanban-board');
+    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Kanban board exists:`, !!kanbanBoard);
+    if (kanbanBoard) {
+      const columnsContainer = kanbanBoard.querySelector('.kanban-columns-container');
+      console.log(`GitLab Milestone Compass: [applyKanbanFilters] Columns container exists:`, !!columnsContainer);
+      if (columnsContainer) {
+        const cardsInContainer = columnsContainer.querySelectorAll('.kanban-card');
+        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Cards in container:`, cardsInContainer.length);
+      }
+    }
     
     // Check if there's an active search - try multiple selectors
     let searchInput = document.getElementById("issue-title-search");
@@ -3237,9 +3678,218 @@
       const titleLink = card.querySelector('.kanban-card-title a');
       const title = titleLink ? titleLink.textContent.toLowerCase() : 'NO TITLE';
       
+      // Get issue URL to find the original issue element
+      const issueUrl = card.getAttribute('data-issue-url');
+      let originalIssue = null;
       
-      // Check search filter first (highest priority)
-      if (hasActiveSearch) {
+      console.log(`GitLab Milestone Compass: [applyKanbanFilters] Looking for original issue with URL: ${issueUrl}`);
+      
+      if (issueUrl) {
+        // Debug: List all available issue links in DOM
+        const allIssueLinks = document.querySelectorAll('a[href*="/issues/"]');
+        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Found ${allIssueLinks.length} issue links in DOM`);
+        
+        // Try multiple selectors for different GitLab versions
+        originalIssue = document.querySelector(`[href="${issueUrl}"]`)?.closest('li, .issuable-row') ||
+                      document.querySelector(`[href*="${issueUrl}"]`)?.closest('li, .issuable-row');
+        
+        if (!originalIssue) {
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Could not find original issue for exact URL: ${issueUrl}`);
+          
+          // Try a more flexible search by issue number
+          const issueNumMatch = issueUrl.match(/\/issues\/(\d+)/);
+          if (issueNumMatch) {
+            const issueNum = issueNumMatch[1];
+            console.log(`GitLab Milestone Compass: [applyKanbanFilters] Trying to find issue #${issueNum}...`);
+            
+            // Look for any link containing this issue number
+            originalIssue = document.querySelector(`[href*="/issues/${issueNum}"]`)?.closest('li, .issuable-row, .!gl-border-b-section');
+            
+            if (originalIssue) {
+              console.log(`GitLab Milestone Compass: [applyKanbanFilters] ✅ Found original issue via issue number: ${issueNum}`);
+            } else {
+              console.log(`GitLab Milestone Compass: [applyKanbanFilters] ❌ Still could not find issue #${issueNum}`);
+              
+              // Debug: Show first few available issue URLs
+              const sampleUrls = Array.from(allIssueLinks).slice(0, 3).map(link => link.getAttribute('href'));
+              console.log(`GitLab Milestone Compass: [applyKanbanFilters] Sample available URLs:`, sampleUrls);
+            }
+          }
+        } else {
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] ✅ Found original issue via exact URL match`);
+        }
+      }
+      
+      // Apply assignee filter (same logic as main view)
+      if (shouldShow && currentFilters.assignee) {
+        let normalAssigneeMatches = false;
+        let alternativeAssigneeMatches = false;
+        
+        if (originalIssue) {
+          // Try to get assignee info from original issue
+          const assigneeImages = originalIssue.querySelectorAll('img[alt], img[title]');
+          normalAssigneeMatches = Array.from(assigneeImages).some(img => {
+            const name = img.getAttribute('alt') || img.getAttribute('title') || '';
+            return name.toLowerCase().includes(currentFilters.assignee.toLowerCase());
+          });
+          
+          // Check for alternative assignee labels in original issue
+          const labelLinks = originalIssue.querySelectorAll(".gl-label .gl-label-link");
+          alternativeAssigneeMatches = Array.from(labelLinks).some((link) => {
+            const href = link.getAttribute("href");
+            if (href) {
+              const urlMatch = href.match(/label_name=([^&]+)/);
+              if (urlMatch) {
+                const decodedLabel = decodeURIComponent(urlMatch[1]);
+                if (decodedLabel.startsWith(alternativeAssigneePrefix)) {
+                  const labelAssigneeName = decodedLabel.substring(alternativeAssigneePrefix.length);
+                  return labelAssigneeName.toLowerCase() === currentFilters.assignee.toLowerCase();
+                }
+              }
+            }
+            return false;
+          });
+        } else {
+          // FALLBACK: Get assignee info directly from Kanban card
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Using fallback assignee detection for card "${title}"`);
+          
+          // Check normal assignee in card
+          const cardAssignee = card.querySelector('.kanban-card-assignee span');
+          if (cardAssignee) {
+            const assigneeName = cardAssignee.textContent.trim();
+            normalAssigneeMatches = assigneeName.toLowerCase().includes(currentFilters.assignee.toLowerCase());
+          }
+          
+          // Check alternative assignee labels in card
+          const cardLabels = card.querySelectorAll('.kanban-card-labels .kanban-label-clone');
+          alternativeAssigneeMatches = Array.from(cardLabels).some(label => {
+            const labelText = label.textContent.trim();
+            if (labelText.startsWith(alternativeAssigneePrefix)) {
+              const labelAssigneeName = labelText.substring(alternativeAssigneePrefix.length);
+              return labelAssigneeName.toLowerCase() === currentFilters.assignee.toLowerCase();
+            }
+            return false;
+          });
+        }
+        
+        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Card "${title}" assignee filter - normal: ${normalAssigneeMatches}, alt: ${alternativeAssigneeMatches}`);
+        
+        if (!normalAssigneeMatches && !alternativeAssigneeMatches) {
+          shouldShow = false;
+        }
+      }
+      
+      // Apply label filter - check if card has ANY of the selected labels
+      if (shouldShow && currentFilters.labels.length > 0) {
+        let cardLabels = [];
+        
+        // Special debugging for Issue #7
+        const isIssue7 = title.includes("#7") || title.includes("highlight active filters");
+        if (isIssue7) {
+          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Starting label detection for "${title}"`);
+        }
+        
+        if (originalIssue) {
+          // Try to get labels from original issue
+          const labelLinks = originalIssue.querySelectorAll(".gl-label .gl-label-link");
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Original issue found for "${title}", has ${labelLinks.length} label links`);
+          
+          const allLabelsFromOriginal = Array.from(labelLinks).map((link) => {
+            const href = link.getAttribute("href");
+            if (href && href.includes("label_name=")) {
+              const extracted = decodeURIComponent(
+                href.split("label_name=")[1]?.split("&")[0] || ""
+              );
+              console.log(`GitLab Milestone Compass: [applyKanbanFilters] Extracted label from original issue: "${extracted}"`);
+              return extracted;
+            }
+            return "";
+          }).filter(label => label !== "");
+          
+          // Filter OUT alternative assignee labels - they should not be treated as regular labels
+          const altAssigneePrefix = loadAlternativeAssigneePrefix();
+          cardLabels = allLabelsFromOriginal.filter(label => !label.startsWith(altAssigneePrefix));
+          
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] All labels from original issue:`, allLabelsFromOriginal);
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Filtered labels from original issue (excluding alt assignees):`, cardLabels);
+        } else {
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] No original issue found for "${title}"`);
+        }
+        
+        // ALWAYS try fallback method as well (get labels from Kanban card)
+        if (cardLabels.length === 0) {
+          const cardLabelElements = card.querySelectorAll('.kanban-card-labels .kanban-label-clone');
+          const allCardLabels = Array.from(cardLabelElements).map(label => label.textContent.trim());
+          
+          // Filter OUT alternative assignee labels - they should not be treated as regular labels
+          const altAssigneePrefix = loadAlternativeAssigneePrefix();
+          cardLabels = allCardLabels.filter(label => !label.startsWith(altAssigneePrefix));
+          
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Using fallback - found ${cardLabelElements.length} label elements, ${allCardLabels.length - cardLabels.length} alternative assignee labels excluded`);
+          if (isIssue7) {
+            console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] All card labels:`, allCardLabels);
+            console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Filtered labels (excluding alt assignees):`, cardLabels);
+          }
+        }
+        
+        // CRITICAL: Add the column's label as an implicit label for this card
+        // Every card in a column should be considered to have that column's label
+        const column = card.closest('.kanban-column');
+        const columnLabel = column ? column.getAttribute('data-label') : null;
+        
+        if (isIssue7) {
+          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Column found:`, !!column);
+          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Column label:`, columnLabel);
+          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Current cardLabels before adding column:`, cardLabels);
+        }
+        
+        if (columnLabel && !cardLabels.includes(columnLabel)) {
+          cardLabels.push(columnLabel);
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Added column label "${columnLabel}" to card "${title}"`);
+          if (isIssue7) {
+            console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Successfully added column label "${columnLabel}"`);
+          }
+        } else if (isIssue7) {
+          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Column label NOT added - columnLabel:`, columnLabel, "already includes:", cardLabels.includes(columnLabel));
+        }
+        
+        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Card "${title}" has labels (including column):`, cardLabels);
+        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Selected label filters:`, currentFilters.labels);
+        
+        // Debug: Show detailed label comparison
+        currentFilters.labels.forEach(selectedLabel => {
+          const hasThisLabel = cardLabels.includes(selectedLabel);
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Card "${title}" has label "${selectedLabel}": ${hasThisLabel}`);
+        });
+        
+        // Check if card has ANY of the selected labels (OR logic for multiple selected labels)
+        const hasSelectedLabel = currentFilters.labels.some(selectedLabel => 
+          cardLabels.includes(selectedLabel)
+        );
+        
+        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Card "${title}" has selected label:`, hasSelectedLabel);
+        
+        if (isIssue7) {
+          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] FINAL RESULT - hasSelectedLabel:`, hasSelectedLabel);
+          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Will be ${hasSelectedLabel ? 'SHOWN' : 'HIDDEN'}`);
+        }
+        
+        // If no labels were found at all, there might be a detection issue
+        if (cardLabels.length === 0) {
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] WARNING: No labels detected for card "${title}"!`);
+          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Card HTML:`, card.outerHTML.substring(0, 500));
+        }
+        
+        if (!hasSelectedLabel) {
+          shouldShow = false;
+          if (isIssue7) {
+            console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] HIDING CARD because hasSelectedLabel is false`);
+          }
+        }
+      }
+      
+      // Check search filter
+      if (shouldShow && hasActiveSearch) {
         if (titleLink) {
           const matchesSearch = searchTerms.every(term => title.includes(term));
           if (!matchesSearch) {
@@ -3263,7 +3913,19 @@
     });
     
     // Update column counts after applying filter
+    console.log(`GitLab Milestone Compass: [applyKanbanFilters] About to update column counts...`);
     updateKanbanColumnCounts();
+    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Filters applied and column counts updated.`);
+    
+    // Final check on column visibility
+    const columns = document.querySelectorAll('.kanban-column');
+    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Final column visibility check: ${columns.length} total columns`);
+    columns.forEach((col, index) => {
+      const isHidden = col.style.display === 'none';
+      const headerText = col.querySelector('.kanban-column-header span')?.textContent || 'Unknown';
+      const visibleCards = col.querySelectorAll('.kanban-card:not([style*="display: none"])').length;
+      console.log(`GitLab Milestone Compass: [applyKanbanFilters] Column ${index + 1} "${headerText}": ${isHidden ? 'HIDDEN' : 'VISIBLE'}, ${visibleCards} visible cards`);
+    });
   }
 
   // Keep the old name for backward compatibility
@@ -3273,9 +3935,15 @@
 
   function updateKanbanColumnCounts() {
     const columns = document.querySelectorAll('.kanban-column');
+    console.log(`GitLab Milestone Compass: [updateKanbanColumnCounts] Processing ${columns.length} columns`);
     
-    columns.forEach(column => {
+    columns.forEach((column, index) => {
+      const totalCards = column.querySelectorAll('.kanban-card');
       const visibleCards = column.querySelectorAll('.kanban-card:not([style*="display: none"])');
+      const headerText = column.querySelector('.kanban-column-header span')?.textContent || 'Unknown';
+      
+      console.log(`GitLab Milestone Compass: [updateKanbanColumnCounts] Column ${index + 1} "${headerText}": ${totalCards.length} total, ${visibleCards.length} visible`);
+      
       const countElement = column.querySelector('.kanban-count');
       if (countElement) {
         countElement.textContent = `(${visibleCards.length})`;
@@ -3285,16 +3953,22 @@
       const shouldHideColumn = visibleCards.length === 0;
       const isCurrentlyHidden = column.style.display === 'none';
       
+      console.log(`GitLab Milestone Compass: [updateKanbanColumnCounts] Column "${headerText}" shouldHide: ${shouldHideColumn}, currentlyHidden: ${isCurrentlyHidden}`);
+      
       // Only change visibility if it's different from current state (reduces flickering)
       if (shouldHideColumn && !isCurrentlyHidden) {
         column.style.display = 'none';
+        console.log(`GitLab Milestone Compass: [updateKanbanColumnCounts] HIDING column "${headerText}" because it has 0 visible cards`);
       } else if (!shouldHideColumn && isCurrentlyHidden) {
         column.style.display = '';
+        console.log(`GitLab Milestone Compass: [updateKanbanColumnCounts] SHOWING column "${headerText}" because it has ${visibleCards.length} visible cards`);
       }
     });
   }
 
   function createKanbanCard(issue, currentColumnLabel = null) {
+    console.log(`GitLab Milestone Compass: [createKanbanCard] Creating card for column "${currentColumnLabel}"`);
+    
     // Get issue title and link - try multiple selectors in order of preference
     let titleElement = null;
     let title = "Unknown Issue";
@@ -3400,10 +4074,25 @@
       }
     }
     
-    // Get ONLY real GitLab assignees (NEVER alternative assignees)
-    const assigneeIcon = issue.querySelector('.assignee-icon a[title*="Assigned to"]');
-    const assigneeName = assigneeIcon ? assigneeIcon.getAttribute("title").replace("Assigned to ", "") : null;
-    const assigneeAvatar = assigneeIcon ? assigneeIcon.querySelector("img")?.getAttribute("src") : null;
+    // Get ONLY real GitLab assignees (NEVER alternative assignees) - Support both GitLab versions
+    let assigneeName = null;
+    let assigneeAvatar = null;
+    
+    // Try GitLab.com structure first
+    const assigneeImg = issue.querySelector('img[alt]:not([alt=""]), img[title]:not([title=""])');
+    if (assigneeImg) {
+      assigneeName = assigneeImg.getAttribute('alt') || assigneeImg.getAttribute('title');
+      assigneeAvatar = assigneeImg.getAttribute('src');
+    }
+    
+    // Fallback to original GitLab structure
+    if (!assigneeName) {
+      const assigneeIcon = issue.querySelector('.assignee-icon a[title*="Assigned to"]');
+      if (assigneeIcon) {
+        assigneeName = assigneeIcon.getAttribute("title").replace("Assigned to ", "");
+        assigneeAvatar = assigneeIcon.querySelector("img")?.getAttribute("src");
+      }
+    }
     
     // Get labels with their actual styling
     const altAssigneePrefix = loadAlternativeAssigneePrefix();
@@ -3455,7 +4144,7 @@
     const issueNumMatch = (issueNumber + title).match(/#(\d+)/);
     const extractedIssueNum = issueNumMatch ? issueNumMatch[1] : "";
 
-    return `
+    const cardHTML = `
       <div class="issuable-row kanban-card" data-issue-url="${link}" data-issue-number="${extractedIssueNum}">
         <div class="kanban-card-title">
           <a href="${link}">${issueNumber}${title}</a>
@@ -3474,6 +4163,9 @@
         </div>
       </div>
     `;
+    
+    console.log(`GitLab Milestone Compass: [createKanbanCard] Created card HTML (${cardHTML.length} chars) for "${currentColumnLabel}"`);
+    return cardHTML;
   }
 
   function getIssuesForLabel(labelName, allIssues) {
@@ -3514,25 +4206,37 @@
 
   // Filtered versions for Kanban that respect existing filter logic
   function getFilteredIssuesForKanbanLabel(labelName, allIssues) {
+    console.log(`GitLab Milestone Compass: [getFilteredIssuesForKanbanLabel] Filtering ${allIssues.length} issues for label "${labelName}"`);
+    
     const filteredIssues = Array.from(allIssues).filter(issue => {
-      // Ensure we're working with actual issue rows
-      if (!issue.classList.contains('issuable-row')) {
+      // Ensure we're working with actual issue rows (supports both GitLab versions)
+      const isIssueRow = issue.classList.contains('issuable-row') || 
+                        issue.classList.contains('!gl-border-b-section') ||
+                        issue.tagName === 'LI';
+      
+      if (!isIssueRow) {
+        console.log(`GitLab Milestone Compass: [getFilteredIssuesForKanbanLabel] Skipping non-issue element:`, issue.className);
         return false;
       }
       
       // First check if issue has the target label
       const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+      console.log(`GitLab Milestone Compass: [getFilteredIssuesForKanbanLabel] Issue has ${labelLinks.length} label links`);
+      
       const hasTargetLabel = Array.from(labelLinks).some(link => {
         const href = link.getAttribute("href");
         if (href) {
           const urlMatch = href.match(/label_name=([^&]+)/);
           if (urlMatch) {
             const decodedLabel = decodeURIComponent(urlMatch[1]);
+            console.log(`GitLab Milestone Compass: [getFilteredIssuesForKanbanLabel] Found label "${decodedLabel}", looking for "${labelName}"`);
             return decodedLabel === labelName;
           }
         }
         return false;
       });
+      
+      console.log(`GitLab Milestone Compass: [getFilteredIssuesForKanbanLabel] Issue has target label "${labelName}": ${hasTargetLabel}`);
       
       if (!hasTargetLabel) return false;
       
@@ -3570,9 +4274,25 @@
   }
 
   function getFilteredMiscIssuesForKanban(configuredLabels, allIssues, usedIssues = new Set()) {
-    return Array.from(allIssues).filter(issue => {
-      // Ensure we're working with actual issue rows
-      if (!issue.classList.contains('issuable-row')) {
+    console.log(`GitLab Milestone Compass: [getFilteredMiscIssuesForKanban] Filtering ${allIssues.length} issues for MISC column`);
+    
+    // Safety limit to prevent infinite loops
+    const MAX_MISC_ISSUES = 10;
+    let processedCount = 0;
+    
+    const filteredIssues = Array.from(allIssues).filter(issue => {
+      processedCount++;
+      if (processedCount > MAX_MISC_ISSUES) {
+        console.log(`GitLab Milestone Compass: [getFilteredMiscIssuesForKanban] Hit safety limit of ${MAX_MISC_ISSUES} issues`);
+        return false;
+      }
+      // Ensure we're working with actual issue rows (supports both GitLab versions)
+      const isIssueRow = issue.classList.contains('issuable-row') || 
+                        issue.classList.contains('!gl-border-b-section') ||
+                        issue.tagName === 'LI';
+      
+      if (!isIssueRow) {
+        console.log(`GitLab Milestone Compass: [getFilteredMiscIssuesForKanban] Skipping non-issue element:`, issue.className);
         return false;
       }
       
@@ -3601,6 +4321,56 @@
       // Apply existing filter logic (BUT NOT SEARCH - that will be applied to Kanban cards)
       return applyNonSearchFiltersToIssue(issue);
     });
+    
+    console.log(`GitLab Milestone Compass: [getFilteredMiscIssuesForKanban] Returning ${filteredIssues.length} MISC issues`);
+    return filteredIssues;
+  }
+
+  // Simplified, safe version of MISC issues function
+  function getSimpleMiscIssues(configuredLabels, allIssues, usedIssues = new Set()) {
+    console.log(`GitLab Milestone Compass: [getSimpleMiscIssues] Starting with ${allIssues.length} issues`);
+    
+    const miscIssues = [];
+    let processedCount = 0;
+    const MAX_MISC_ISSUES = 5; // Conservative limit
+    
+    for (const issue of allIssues) {
+      processedCount++;
+      if (processedCount > 50) { // Safety limit for total processing
+        console.log(`GitLab Milestone Compass: [getSimpleMiscIssues] Hit processing safety limit`);
+        break;
+      }
+      
+      // Skip if already used in other columns
+      const issueUrl = getIssueUrlFromElement(issue);
+      if (issueUrl && usedIssues.has(issueUrl)) {
+        continue;
+      }
+      
+      // Simple check: if issue doesn't have any of the configured labels, it's MISC
+      const hasConfiguredLabel = configuredLabels.some(labelName => {
+        const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+        return Array.from(labelLinks).some(link => {
+          const href = link.getAttribute("href");
+          if (href) {
+            const urlMatch = href.match(/label_name=([^&]+)/);
+            if (urlMatch) {
+              const decodedLabel = decodeURIComponent(urlMatch[1]);
+              return decodedLabel === labelName;
+            }
+          }
+          return false;
+        });
+      });
+      
+      if (!hasConfiguredLabel && miscIssues.length < MAX_MISC_ISSUES) {
+        miscIssues.push(issue);
+        console.log(`GitLab Milestone Compass: [getSimpleMiscIssues] Added MISC issue ${miscIssues.length}`);
+      }
+    }
+    
+    console.log(`GitLab Milestone Compass: [getSimpleMiscIssues] Returning ${miscIssues.length} MISC issues`);
+    return miscIssues;
   }
 
   // Apply all filters except search (for Kanban card creation)
