@@ -1714,40 +1714,40 @@
             count = label.count;
           } else {
             // For main view: use existing logic
-            // Check if there's an active search
-            const searchInput = document.getElementById("issue-title-search");
-            const hasActiveSearch =
-              searchInput && searchInput.value.trim() !== "";
+          // Check if there's an active search
+          const searchInput = document.getElementById("issue-title-search");
+          const hasActiveSearch =
+            searchInput && searchInput.value.trim() !== "";
 
-            // If this label is already selected, show its original count
-            if (currentFilters.labels.includes(label.name)) {
-              count = getFilteredIssueCountWithMultipleLabels(
-                label.name,
-                currentFilters.assignee,
-                currentFilters.labels
-              );
-            } else if (
-              currentFilters.assignee ||
-              currentFilters.labels.length > 0
-            ) {
-              // Count issues that have this label AND the current filters
-              count = getFilteredIssueCountWithMultipleLabels(
-                label.name,
-                currentFilters.assignee,
-                currentFilters.labels
-              );
-            } else {
-              count = label.count;
-            }
+          // If this label is already selected, show its original count
+          if (currentFilters.labels.includes(label.name)) {
+            count = getFilteredIssueCountWithMultipleLabels(
+              label.name,
+              currentFilters.assignee,
+              currentFilters.labels
+            );
+          } else if (
+            currentFilters.assignee ||
+            currentFilters.labels.length > 0
+          ) {
+            // Count issues that have this label AND the current filters
+            count = getFilteredIssueCountWithMultipleLabels(
+              label.name,
+              currentFilters.assignee,
+              currentFilters.labels
+            );
+          } else {
+            count = label.count;
+          }
 
-            // If there's an active search, further filter by search term
-            if (hasActiveSearch) {
-              count = getFilteredIssueCountWithSearch(
-                label.name,
-                currentFilters.assignee,
-                currentFilters.labels,
-                searchInput.value
-              );
+          // If there's an active search, further filter by search term
+          if (hasActiveSearch) {
+            count = getFilteredIssueCountWithSearch(
+              label.name,
+              currentFilters.assignee,
+              currentFilters.labels,
+              searchInput.value
+            );
             }
           }
 
@@ -3618,8 +3618,14 @@
 
   function applyKanbanFilters() {
     console.log(`GitLab Milestone Compass: [applyKanbanFilters] Starting to apply filters...`);
+    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Current filters:`, {
+      assignee: currentFilters.assignee,
+      labels: currentFilters.labels,
+      titleSearch: currentFilters.titleSearch
+    });
     
     const hideClosedState = loadHideClosedState();
+    const alternativeAssigneePrefix = loadAlternativeAssigneePrefix(); // Load once at the start
     const kanbanCards = document.querySelectorAll('.kanban-card');
     
     console.log(`GitLab Milestone Compass: [applyKanbanFilters] Found ${kanbanCards.length} cards, hideClosedState: ${hideClosedState}`);
@@ -3724,48 +3730,38 @@
         let normalAssigneeMatches = false;
         let alternativeAssigneeMatches = false;
         
+        // Check normal assignees first
         if (originalIssue) {
-          // Try to get assignee info from original issue
           const assigneeImages = originalIssue.querySelectorAll('img[alt], img[title]');
           normalAssigneeMatches = Array.from(assigneeImages).some(img => {
             const name = img.getAttribute('alt') || img.getAttribute('title') || '';
             return name.toLowerCase().includes(currentFilters.assignee.toLowerCase());
           });
-          
-          // Check for alternative assignee labels in original issue
-          const labelLinks = originalIssue.querySelectorAll(".gl-label .gl-label-link");
-          alternativeAssigneeMatches = Array.from(labelLinks).some((link) => {
-            const href = link.getAttribute("href");
-            if (href) {
-              const urlMatch = href.match(/label_name=([^&]+)/);
-              if (urlMatch) {
-                const decodedLabel = decodeURIComponent(urlMatch[1]);
-                if (decodedLabel.startsWith(alternativeAssigneePrefix)) {
-                  const labelAssigneeName = decodedLabel.substring(alternativeAssigneePrefix.length);
-                  return labelAssigneeName.toLowerCase() === currentFilters.assignee.toLowerCase();
-                }
-              }
-            }
-            return false;
-          });
-        } else {
-          // FALLBACK: Get assignee info directly from Kanban card
+        }
+        
+        // FALLBACK: Get normal assignee from Kanban card
+        if (!normalAssigneeMatches) {
           const cardAssignee = card.querySelector('.kanban-card-assignee span');
           if (cardAssignee) {
             const assigneeName = cardAssignee.textContent.trim();
             normalAssigneeMatches = assigneeName.toLowerCase().includes(currentFilters.assignee.toLowerCase());
           }
-          
-          // Check alternative assignee labels in card
-          const cardLabels = card.querySelectorAll('.kanban-card-labels .kanban-label-clone');
-          alternativeAssigneeMatches = Array.from(cardLabels).some(label => {
-            const labelText = label.textContent.trim();
-            if (labelText.startsWith(alternativeAssigneePrefix)) {
-              const labelAssigneeName = labelText.substring(alternativeAssigneePrefix.length);
-              return labelAssigneeName.toLowerCase() === currentFilters.assignee.toLowerCase();
-            }
-            return false;
-          });
+        }
+        
+        // Check alternative assignee labels - use Kanban card (most reliable)
+        const cardLabels = card.querySelectorAll('.kanban-card-labels .kanban-label-clone');
+        alternativeAssigneeMatches = Array.from(cardLabels).some(label => {
+          const labelText = label.textContent.trim();
+          if (labelText.startsWith(alternativeAssigneePrefix)) {
+            const labelAssigneeName = labelText.substring(alternativeAssigneePrefix.length);
+            return labelAssigneeName.toLowerCase() === currentFilters.assignee.toLowerCase();
+          }
+          return false;
+        });
+        
+        // Simple test - log when we're filtering for alternative assignees
+        if (currentFilters.assignee && (currentFilters.assignee === 'dev1' || currentFilters.assignee === 'dev2' || currentFilters.assignee === 'dev3')) {
+          console.log(`🔧 ALT ASSIGNEE: Card "${title}" - Looking for "${currentFilters.assignee}", found alt match: ${alternativeAssigneeMatches}, will ${(!normalAssigneeMatches && !alternativeAssigneeMatches) ? 'HIDE' : 'SHOW'}`);
         }
         
         if (!normalAssigneeMatches && !alternativeAssigneeMatches) {
@@ -3792,8 +3788,7 @@
           }).filter(label => label !== "");
           
           // Filter OUT alternative assignee labels - they should not be treated as regular labels
-          const altAssigneePrefix = loadAlternativeAssigneePrefix();
-          cardLabels = allLabelsFromOriginal.filter(label => !label.startsWith(altAssigneePrefix));
+          cardLabels = allLabelsFromOriginal.filter(label => !label.startsWith(alternativeAssigneePrefix));
         }
         
         // ALWAYS try fallback method as well (get labels from Kanban card)
@@ -3802,8 +3797,7 @@
           const allCardLabels = Array.from(cardLabelElements).map(label => label.textContent.trim());
           
           // Filter OUT alternative assignee labels - they should not be treated as regular labels
-          const altAssigneePrefix = loadAlternativeAssigneePrefix();
-          cardLabels = allCardLabels.filter(label => !label.startsWith(altAssigneePrefix));
+          cardLabels = allCardLabels.filter(label => !label.startsWith(alternativeAssigneePrefix));
         }
         
         // CRITICAL: Add the column's label as an implicit label for this card
@@ -3815,9 +3809,38 @@
           cardLabels.push(columnLabel);
         }
         
+        // Debug logging for troubleshooting label filtering
+        const cardTitle = card.querySelector('.kanban-card-title a')?.textContent?.trim() || 'Unknown';
+        if (cardTitle.includes('#2') || currentFilters.labels.includes('help wanted') || currentFilters.labels.includes('help+wanted')) {
+          console.log(`DEBUG: Card "${cardTitle}":`);
+          console.log(`  - Card labels from original:`, originalIssue ? Array.from(originalIssue.querySelectorAll(".gl-label .gl-label-link")).map(link => {
+            const href = link.getAttribute("href");
+            return href && href.includes("label_name=") ? decodeURIComponent(href.split("label_name=")[1]?.split("&")[0] || "") : "";
+          }).filter(l => l !== "") : 'No original issue');
+          console.log(`  - Card labels from Kanban:`, Array.from(card.querySelectorAll('.kanban-card-labels .kanban-label-clone')).map(l => l.textContent.trim()));
+          console.log(`  - Final cardLabels:`, cardLabels);
+          console.log(`  - Selected labels in filter:`, currentFilters.labels);
+          console.log(`  - Column label:`, columnLabel);
+        }
+        
+        // Normalize both selected labels and card labels for comparison
+        // Handle URL encoding differences (e.g., "help+wanted" vs "help wanted")
+        const normalizedSelectedLabels = currentFilters.labels.map(label => 
+          decodeURIComponent(label.replace(/\+/g, ' '))
+        );
+        const normalizedCardLabels = cardLabels.map(label => 
+          decodeURIComponent(label.replace(/\+/g, ' '))
+        );
+        
+        // Additional debug for issue #2
+        if (cardTitle.includes('#2')) {
+          console.log(`  - Normalized selected labels:`, normalizedSelectedLabels);
+          console.log(`  - Normalized card labels:`, normalizedCardLabels);
+        }
+        
         // Check if card has ANY of the selected labels (OR logic for multiple selected labels)
-        const hasSelectedLabel = currentFilters.labels.some(selectedLabel => 
-          cardLabels.includes(selectedLabel)
+        const hasSelectedLabel = normalizedSelectedLabels.some(selectedLabel => 
+          normalizedCardLabels.includes(selectedLabel)
         );
         
         if (!hasSelectedLabel) {
