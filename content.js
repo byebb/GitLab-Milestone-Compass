@@ -1607,6 +1607,12 @@
       // Apply Kanban filters (search + hide closed)
       applyKanbanFilters();
       
+      // Update assignee counts based on Hide Closed state
+      const hideClosedState = loadHideClosedState();
+      console.log(`[refreshKanbanBoardIfVisible] Updating assignee counts, Hide Closed: ${hideClosedState}`);
+      const assignees = extractAssignees();
+      updateAssigneeCounts(assignees);
+      
       // Apply search highlighting after filters
       if (searchInput && searchInput.value.trim() !== "") {
         setTimeout(() => {
@@ -1674,7 +1680,116 @@
     });
   }
 
+  // Count only open (non-closed) issues for an assignee
+  function getOpenIssueCountForAssignee(assigneeName, isAlternative = false) {
+    const allIssues = document.querySelectorAll('.issuable-row, li.\\!gl-border-b-section, li[class*="border"]');
+    const alternativeAssigneePrefix = loadAlternativeAssigneePrefix();
+    let count = 0;
+    
+    console.log(`[getOpenIssueCountForAssignee] Counting for ${assigneeName} (isAlternative: ${isAlternative})`);
+    
+    Array.from(allIssues).forEach(issue => {
+      const issueTitle = issue.querySelector('a[title], span > a')?.textContent?.trim() || 'Unknown';
+      let hasAssignee = false;
+      
+      if (isAlternative) {
+        // Check for alternative assignee labels
+        const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+        hasAssignee = Array.from(labelLinks).some(link => {
+          const labelSpan = link.querySelector(".gl-label-text");
+          if (labelSpan) {
+            const labelText = labelSpan.textContent.trim();
+            if (labelText.startsWith(alternativeAssigneePrefix)) {
+              const labelAssigneeName = labelText.substring(alternativeAssigneePrefix.length);
+              const isMatch = labelAssigneeName.toLowerCase() === assigneeName.toLowerCase();
+              if (isMatch) {
+                console.log(`[getOpenIssueCountForAssignee] ${issueTitle}: Found alternative assignee match "${labelText}"`);
+              }
+              return isMatch;
+            }
+          }
+          return false;
+        });
+      } else {
+        // Check for normal GitLab assignees - try multiple selectors for GitLab.com
+        const assigneeSelectors = [
+          'img[alt]', 
+          'img[title]',
+          '.assignee-icon img',
+          '[data-assignee] img',
+          '.gl-avatar img'
+        ];
+        
+        for (const selector of assigneeSelectors) {
+          const assigneeImages = issue.querySelectorAll(selector);
+          hasAssignee = Array.from(assigneeImages).some(img => {
+            const name = img.getAttribute('alt') || img.getAttribute('title') || '';
+            const isMatch = name.toLowerCase().includes(assigneeName.toLowerCase());
+            if (isMatch) {
+              console.log(`[getOpenIssueCountForAssignee] ${issueTitle}: Found assignee match "${name}" using selector "${selector}"`);
+            }
+            return isMatch;
+          });
+          
+          if (hasAssignee) break; // Found match, no need to try other selectors
+        }
+      }
+      
+      if (hasAssignee) {
+        // Check if issue is NOT closed
+        const isClosed = isIssueClosed(issue);
+        console.log(`[getOpenIssueCountForAssignee] ${issueTitle}: Assigned to ${assigneeName}, Closed: ${isClosed}`);
+        if (!isClosed) {
+          count++;
+        }
+      }
+    });
+    
+    console.log(`[getOpenIssueCountForAssignee] ${assigneeName}: Total open issues = ${count}`);
+    return count;
+  }
+  
+  // Helper function to determine if an issue is closed
+  function isIssueClosed(issue) {
+    const issueTitle = issue.querySelector('a[title], span > a')?.textContent?.trim() || 'Unknown';
+    const issueUrl = getIssueUrlFromElement(issue);
+    
+    // PRIMARY METHOD: Use issue status from the status map (most reliable)
+    const statusFromMap = issueStatusMap.get(issueUrl);
+    if (statusFromMap === 'completed') {
+      console.log(`[isIssueClosed] ${issueTitle}: CLOSED (status map)`);
+      return true;
+    }
+    
+    // FALLBACK METHOD 1: Check if issue appears in the "Completed" section of the default view
+    const completedSection = document.querySelector('#work_items-list-closed, .completed-section, [data-section="closed"]');
+    if (completedSection && completedSection.contains(issue)) {
+      console.log(`[isIssueClosed] ${issueTitle}: CLOSED (completed section)`);
+      return true;
+    }
+    
+    // FALLBACK METHOD 2: Check for closed status in issue element classes or attributes
+    if (issue.classList.contains('closed') || issue.hasAttribute('data-state') && issue.getAttribute('data-state') === 'closed') {
+      console.log(`[isIssueClosed] ${issueTitle}: CLOSED (classes/attributes)`);
+      return true;
+    }
+    
+    // FALLBACK METHOD 3: Look for closed indicators in the issue content
+    const closedIndicators = issue.querySelectorAll('[title*="closed"], [aria-label*="closed"], .gl-badge:contains("Closed")');
+    if (closedIndicators.length > 0) {
+      console.log(`[isIssueClosed] ${issueTitle}: CLOSED (indicators)`);
+      return true;
+    }
+    
+    console.log(`[isIssueClosed] ${issueTitle}: OPEN (status: ${statusFromMap || 'unknown'})`);
+    return false; // Default to open if we can't determine status
+  }
+
   function updateAssigneeCounts(assignees) {
+    // Check if Hide Closed toggle is active
+    const hideClosedState = loadHideClosedState();
+    console.log(`[updateAssigneeCounts] Hide Closed State: ${hideClosedState}`);
+    
     assignees.forEach((assignee) => {
       const assigneeItem = document.querySelector(
         `[data-assignee-name="${assignee.name}"]`
@@ -1689,30 +1804,40 @@
           const hasActiveSearch =
             searchInput && searchInput.value.trim() !== "";
 
-          if (currentFilters.labels.length > 0) {
-            // Count issues that have this assignee AND all selected labels
-            count = getFilteredIssueCountForAssigneeWithMultipleLabels(
-              assignee.name,
-              currentFilters.labels
-            );
+          if (hideClosedState) {
+            // When Hide Closed is active, count only open issues for this assignee
+            count = getOpenIssueCountForAssignee(assignee.name, assignee.isAlternative);
+            console.log(`[updateAssigneeCounts] ${assignee.name}: Open issues count = ${count}`);
+            
+            // TODO: Add support for filtering open issues by labels and search when Hide Closed is active
+            // For now, we use the simple open count
           } else {
-            count = getIssueCountForAssignee(assignee.name, assignee.isAlternative);
-          }
+            // Normal counting logic when Hide Closed is not active
+            if (currentFilters.labels.length > 0) {
+              // Count issues that have this assignee AND all selected labels
+              count = getFilteredIssueCountForAssigneeWithMultipleLabels(
+                assignee.name,
+                currentFilters.labels
+              );
+            } else {
+              count = getIssueCountForAssignee(assignee.name, assignee.isAlternative);
+            }
 
-          // If there's an active search, further filter by search term
-          if (hasActiveSearch) {
-            count = getFilteredIssueCountForAssigneeWithSearch(
-              assignee.name,
-              currentFilters.labels,
-              searchInput.value
-            );
+            // If there's an active search, further filter by search term
+            if (hasActiveSearch) {
+              count = getFilteredIssueCountForAssigneeWithSearch(
+                assignee.name,
+                currentFilters.labels,
+                searchInput.value
+              );
+            }
           }
 
           countSpan.textContent = `(${count})`;
 
           // Hide assignees with zero count when filtering (but keep selected assignees visible)
           const isSelectedAssignee = currentFilters.assignee === assignee.name;
-          const hasActiveFilters = currentFilters.labels.length > 0 || hasActiveSearch;
+          const hasActiveFilters = currentFilters.labels.length > 0 || hasActiveSearch || hideClosedState;
           
           if (hasActiveFilters && count === 0 && !isSelectedAssignee) {
             assigneeItem.style.display = "none";
@@ -3279,6 +3404,10 @@
         saveHideClosedState(hideClosedIssues);
         applyKanbanFilters();
         
+        // Update assignee counts when Hide Closed toggle changes
+        const assignees = extractAssignees();
+        updateAssigneeCounts(assignees);
+        
         // Apply search highlighting after filters
         const searchInput = document.getElementById("issue-title-search");
         if (searchInput && searchInput.value.trim() !== "") {
@@ -4228,10 +4357,7 @@
         const normalizedColumnLabel = currentColumnLabel ? decodeURIComponent(currentColumnLabel.replace(/\+/g, ' ')) : null;
         const isCurrentColumnLabel = normalizedColumnLabel && normalizedLabelText === normalizedColumnLabel;
         
-        // Debug: Log label comparison for "help wanted" labels
-        if (labelText.includes("help") || (currentColumnLabel && currentColumnLabel.includes("help"))) {
-          console.log(`Label filtering debug: labelText="${labelText}", currentColumnLabel="${currentColumnLabel}", normalizedLabelText="${normalizedLabelText}", normalizedColumnLabel="${normalizedColumnLabel}", isCurrentColumnLabel=${isCurrentColumnLabel}, isAltAssigneeLabel=${isAltAssigneeLabel}`);
-        }
+
         
         // Show alternative assignee labels, but skip the current column's label
         if (isCurrentColumnLabel && !isAltAssigneeLabel) {
