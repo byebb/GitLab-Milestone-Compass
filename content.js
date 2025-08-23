@@ -4357,8 +4357,9 @@
       
       if (!hasTargetLabel) return false;
       
-      // Apply existing filter logic (BUT NOT SEARCH - that will be applied to Kanban cards)
-      return applyNonSearchFiltersToIssue(issue);
+      // DO NOT apply current filters here - Kanban columns should show ALL issues with the label
+      // Filters are applied later to hide/show individual cards within columns
+      return true;
     });
     
     return filteredIssues;
