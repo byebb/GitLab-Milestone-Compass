@@ -4222,7 +4222,16 @@
         // INCLUDE alternative assignee labels (show them in cards)
         // EXCLUDE the current column's label (redundant since it's already the column)
         const isAltAssigneeLabel = labelText.startsWith(altAssigneePrefix);
-        const isCurrentColumnLabel = currentColumnLabel && labelText === currentColumnLabel;
+        
+        // Normalize both labels for comparison (handle URL encoding differences)
+        const normalizedLabelText = decodeURIComponent(labelText.replace(/\+/g, ' '));
+        const normalizedColumnLabel = currentColumnLabel ? decodeURIComponent(currentColumnLabel.replace(/\+/g, ' ')) : null;
+        const isCurrentColumnLabel = normalizedColumnLabel && normalizedLabelText === normalizedColumnLabel;
+        
+        // Debug: Log label comparison for "help wanted" labels
+        if (labelText.includes("help") || (currentColumnLabel && currentColumnLabel.includes("help"))) {
+          console.log(`Label filtering debug: labelText="${labelText}", currentColumnLabel="${currentColumnLabel}", normalizedLabelText="${normalizedLabelText}", normalizedColumnLabel="${normalizedColumnLabel}", isCurrentColumnLabel=${isCurrentColumnLabel}, isAltAssigneeLabel=${isAltAssigneeLabel}`);
+        }
         
         // Show alternative assignee labels, but skip the current column's label
         if (isCurrentColumnLabel && !isAltAssigneeLabel) {
