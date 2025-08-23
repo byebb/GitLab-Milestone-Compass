@@ -1712,7 +1712,6 @@
             // For Kanban view: use the original label count (don't recount from cards)
             // This prevents circular dependency with filtering
             count = label.count;
-            console.log(`GitLab Milestone Compass: [updateLabelCounts] Kanban mode - Using original count for "${label.name}": ${count}`);
           } else {
             // For main view: use existing logic
             // Check if there's an active search
@@ -3751,9 +3750,6 @@
           });
         } else {
           // FALLBACK: Get assignee info directly from Kanban card
-          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Using fallback assignee detection for card "${title}"`);
-          
-          // Check normal assignee in card
           const cardAssignee = card.querySelector('.kanban-card-assignee span');
           if (cardAssignee) {
             const assigneeName = cardAssignee.textContent.trim();
@@ -3772,8 +3768,6 @@
           });
         }
         
-        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Card "${title}" assignee filter - normal: ${normalAssigneeMatches}, alt: ${alternativeAssigneeMatches}`);
-        
         if (!normalAssigneeMatches && !alternativeAssigneeMatches) {
           shouldShow = false;
         }
@@ -3783,25 +3777,16 @@
       if (shouldShow && currentFilters.labels.length > 0) {
         let cardLabels = [];
         
-        // Special debugging for Issue #7
-        const isIssue7 = title.includes("#7") || title.includes("highlight active filters");
-        if (isIssue7) {
-          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Starting label detection for "${title}"`);
-        }
-        
         if (originalIssue) {
           // Try to get labels from original issue
           const labelLinks = originalIssue.querySelectorAll(".gl-label .gl-label-link");
-          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Original issue found for "${title}", has ${labelLinks.length} label links`);
           
           const allLabelsFromOriginal = Array.from(labelLinks).map((link) => {
             const href = link.getAttribute("href");
             if (href && href.includes("label_name=")) {
-              const extracted = decodeURIComponent(
+              return decodeURIComponent(
                 href.split("label_name=")[1]?.split("&")[0] || ""
               );
-              console.log(`GitLab Milestone Compass: [applyKanbanFilters] Extracted label from original issue: "${extracted}"`);
-              return extracted;
             }
             return "";
           }).filter(label => label !== "");
@@ -3809,11 +3794,6 @@
           // Filter OUT alternative assignee labels - they should not be treated as regular labels
           const altAssigneePrefix = loadAlternativeAssigneePrefix();
           cardLabels = allLabelsFromOriginal.filter(label => !label.startsWith(altAssigneePrefix));
-          
-          console.log(`GitLab Milestone Compass: [applyKanbanFilters] All labels from original issue:`, allLabelsFromOriginal);
-          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Filtered labels from original issue (excluding alt assignees):`, cardLabels);
-        } else {
-          console.log(`GitLab Milestone Compass: [applyKanbanFilters] No original issue found for "${title}"`);
         }
         
         // ALWAYS try fallback method as well (get labels from Kanban card)
@@ -3824,12 +3804,6 @@
           // Filter OUT alternative assignee labels - they should not be treated as regular labels
           const altAssigneePrefix = loadAlternativeAssigneePrefix();
           cardLabels = allCardLabels.filter(label => !label.startsWith(altAssigneePrefix));
-          
-          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Using fallback - found ${cardLabelElements.length} label elements, ${allCardLabels.length - cardLabels.length} alternative assignee labels excluded`);
-          if (isIssue7) {
-            console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] All card labels:`, allCardLabels);
-            console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Filtered labels (excluding alt assignees):`, cardLabels);
-          }
         }
         
         // CRITICAL: Add the column's label as an implicit label for this card
@@ -3837,54 +3811,17 @@
         const column = card.closest('.kanban-column');
         const columnLabel = column ? column.getAttribute('data-label') : null;
         
-        if (isIssue7) {
-          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Column found:`, !!column);
-          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Column label:`, columnLabel);
-          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Current cardLabels before adding column:`, cardLabels);
-        }
-        
         if (columnLabel && !cardLabels.includes(columnLabel)) {
           cardLabels.push(columnLabel);
-          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Added column label "${columnLabel}" to card "${title}"`);
-          if (isIssue7) {
-            console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Successfully added column label "${columnLabel}"`);
-          }
-        } else if (isIssue7) {
-          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Column label NOT added - columnLabel:`, columnLabel, "already includes:", cardLabels.includes(columnLabel));
         }
-        
-        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Card "${title}" has labels (including column):`, cardLabels);
-        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Selected label filters:`, currentFilters.labels);
-        
-        // Debug: Show detailed label comparison
-        currentFilters.labels.forEach(selectedLabel => {
-          const hasThisLabel = cardLabels.includes(selectedLabel);
-          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Card "${title}" has label "${selectedLabel}": ${hasThisLabel}`);
-        });
         
         // Check if card has ANY of the selected labels (OR logic for multiple selected labels)
         const hasSelectedLabel = currentFilters.labels.some(selectedLabel => 
           cardLabels.includes(selectedLabel)
         );
         
-        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Card "${title}" has selected label:`, hasSelectedLabel);
-        
-        if (isIssue7) {
-          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] FINAL RESULT - hasSelectedLabel:`, hasSelectedLabel);
-          console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] Will be ${hasSelectedLabel ? 'SHOWN' : 'HIDDEN'}`);
-        }
-        
-        // If no labels were found at all, there might be a detection issue
-        if (cardLabels.length === 0) {
-          console.log(`GitLab Milestone Compass: [applyKanbanFilters] WARNING: No labels detected for card "${title}"!`);
-          console.log(`GitLab Milestone Compass: [applyKanbanFilters] Card HTML:`, card.outerHTML.substring(0, 500));
-        }
-        
         if (!hasSelectedLabel) {
           shouldShow = false;
-          if (isIssue7) {
-            console.log(`🔍 GitLab Milestone Compass: [DEBUG ISSUE #7] HIDING CARD because hasSelectedLabel is false`);
-          }
         }
       }
       
