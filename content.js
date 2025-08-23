@@ -1135,6 +1135,9 @@
 
     console.log(`GitLab Milestone Compass: Assignee clicked: "${assigneeName}"`);
 
+    // Clear the unassigned-only filter when selecting an assignee
+    currentFilters.showUnassignedOnly = false;
+
     // Toggle selection
     const isSelected = assigneeItem.classList.contains("selected");
 
@@ -1178,6 +1181,9 @@
 
   function handleLabelSelection(labelItem, assignees) {
     const labelName = labelItem.getAttribute("data-label-name");
+
+    // Clear the unassigned-only filter when selecting a label
+    currentFilters.showUnassignedOnly = false;
 
     // Toggle selection
     const isSelected = labelItem.classList.contains("selected");
@@ -1282,21 +1288,42 @@
     clearAllSelections();
     currentFilters.assignee = null;
     currentFilters.labels = [];
+    currentFilters.showUnassignedOnly = false;
 
     // Don't clear the title search - keep it active and combine with filter buttons
     // clearTitleSearch(); // REMOVED THIS LINE
 
+    // Check if Kanban board is active
+    const kanbanBoard = document.querySelector("#kanban-board");
+    const isKanbanActive = kanbanBoard && kanbanBoard.style.display !== "none";
+
     switch (action) {
       case "show-all":
-        showAllIssues();
+        if (isKanbanActive) {
+          // For Kanban, just apply the cleared filters
+          applyKanbanFilters();
+        } else {
+          showAllIssues();
+        }
         button.classList.add("active");
         break;
       case "show-unassigned":
-        filterUnassignedIssues();
+        if (isKanbanActive) {
+          // For Kanban, set a special flag to show only unassigned issues
+          currentFilters.showUnassignedOnly = true;
+          applyKanbanFilters();
+        } else {
+          filterUnassignedIssues();
+        }
         button.classList.add("active");
         break;
       case "clear":
-        showAllIssues();
+        if (isKanbanActive) {
+          // For Kanban, just apply the cleared filters
+          applyKanbanFilters();
+        } else {
+          showAllIssues();
+        }
         updateFilterButtons();
         break;
     }
@@ -3617,30 +3644,12 @@
   }
 
   function applyKanbanFilters() {
-    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Starting to apply filters...`);
-    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Current filters:`, {
-      assignee: currentFilters.assignee,
-      labels: currentFilters.labels,
-      titleSearch: currentFilters.titleSearch
-    });
     
     const hideClosedState = loadHideClosedState();
     const alternativeAssigneePrefix = loadAlternativeAssigneePrefix(); // Load once at the start
     const kanbanCards = document.querySelectorAll('.kanban-card');
     
-    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Found ${kanbanCards.length} cards, hideClosedState: ${hideClosedState}`);
-    
-    // Debug: Check if kanban board exists in DOM
     const kanbanBoard = document.querySelector('#kanban-board');
-    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Kanban board exists:`, !!kanbanBoard);
-    if (kanbanBoard) {
-      const columnsContainer = kanbanBoard.querySelector('.kanban-columns-container');
-      console.log(`GitLab Milestone Compass: [applyKanbanFilters] Columns container exists:`, !!columnsContainer);
-      if (columnsContainer) {
-        const cardsInContainer = columnsContainer.querySelectorAll('.kanban-card');
-        console.log(`GitLab Milestone Compass: [applyKanbanFilters] Cards in container:`, cardsInContainer.length);
-      }
-    }
     
     // Check if there's an active search - try multiple selectors
     let searchInput = document.getElementById("issue-title-search");
@@ -3769,6 +3778,31 @@
         }
       }
       
+      // Apply unassigned-only filter
+      if (shouldShow && currentFilters.showUnassignedOnly) {
+        let hasRealAssignee = false;
+        
+        // Check if card has a real GitLab assignee (not alternative assignee)
+        if (originalIssue) {
+          const assigneeImages = originalIssue.querySelectorAll('img[alt], img[title]');
+          hasRealAssignee = Array.from(assigneeImages).some(img => {
+            const name = img.getAttribute('alt') || img.getAttribute('title') || '';
+            return name.trim() !== '';
+          });
+        }
+        
+        // FALLBACK: Check Kanban card for real assignee
+        if (!hasRealAssignee) {
+          const cardAssignee = card.querySelector('.kanban-card-assignee span');
+          hasRealAssignee = cardAssignee && cardAssignee.textContent.trim() !== '';
+        }
+        
+        // Hide cards that have real assignees when "unassigned only" filter is active
+        if (hasRealAssignee) {
+          shouldShow = false;
+        }
+      }
+      
       // Apply label filter - check if card has ANY of the selected labels
       if (shouldShow && currentFilters.labels.length > 0) {
         let cardLabels = [];
@@ -3809,19 +3843,7 @@
           cardLabels.push(columnLabel);
         }
         
-        // Debug logging for troubleshooting label filtering
-        const cardTitle = card.querySelector('.kanban-card-title a')?.textContent?.trim() || 'Unknown';
-        if (cardTitle.includes('#2') || currentFilters.labels.includes('help wanted') || currentFilters.labels.includes('help+wanted')) {
-          console.log(`DEBUG: Card "${cardTitle}":`);
-          console.log(`  - Card labels from original:`, originalIssue ? Array.from(originalIssue.querySelectorAll(".gl-label .gl-label-link")).map(link => {
-            const href = link.getAttribute("href");
-            return href && href.includes("label_name=") ? decodeURIComponent(href.split("label_name=")[1]?.split("&")[0] || "") : "";
-          }).filter(l => l !== "") : 'No original issue');
-          console.log(`  - Card labels from Kanban:`, Array.from(card.querySelectorAll('.kanban-card-labels .kanban-label-clone')).map(l => l.textContent.trim()));
-          console.log(`  - Final cardLabels:`, cardLabels);
-          console.log(`  - Selected labels in filter:`, currentFilters.labels);
-          console.log(`  - Column label:`, columnLabel);
-        }
+
         
         // Normalize both selected labels and card labels for comparison
         // Handle URL encoding differences (e.g., "help+wanted" vs "help wanted")
@@ -3832,11 +3854,7 @@
           decodeURIComponent(label.replace(/\+/g, ' '))
         );
         
-        // Additional debug for issue #2
-        if (cardTitle.includes('#2')) {
-          console.log(`  - Normalized selected labels:`, normalizedSelectedLabels);
-          console.log(`  - Normalized card labels:`, normalizedCardLabels);
-        }
+
         
         // Check if card has ANY of the selected labels (OR logic for multiple selected labels)
         const hasSelectedLabel = normalizedSelectedLabels.some(selectedLabel => 
