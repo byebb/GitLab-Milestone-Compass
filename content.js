@@ -1231,6 +1231,9 @@
     // Clear all label selections
     currentFilters.labels = [];
     clearLabelSelections();
+    
+    // Clear the unassigned-only filter when resetting labels
+    currentFilters.showUnassignedOnly = false;
 
     // Clear search input
     const searchInput = document.getElementById("label-search-input");
@@ -1303,7 +1306,7 @@
           // For Kanban, just apply the cleared filters
           applyKanbanFilters();
         } else {
-          showAllIssues();
+        showAllIssues();
         }
         button.classList.add("active");
         break;
@@ -1313,7 +1316,7 @@
           currentFilters.showUnassignedOnly = true;
           applyKanbanFilters();
         } else {
-          filterUnassignedIssues();
+        filterUnassignedIssues();
         }
         button.classList.add("active");
         break;
@@ -1322,7 +1325,7 @@
           // For Kanban, just apply the cleared filters
           applyKanbanFilters();
         } else {
-          showAllIssues();
+        showAllIssues();
         }
         updateFilterButtons();
         break;
@@ -1721,10 +1724,185 @@
     });
   }
 
+  // Get all issues that match current assignee filter (for smart label filtering)
+  function getFilteredIssuesForSmartFiltering() {
+    const allIssues = document.querySelectorAll('.issuable-row, li.\\!gl-border-b-section, li[class*="border"]');
+    const alternativeAssigneePrefix = loadAlternativeAssigneePrefix();
+    
+    return Array.from(allIssues).filter(issue => {
+      // Apply assignee filter if active
+      if (currentFilters.assignee) {
+        let hasAssignee = false;
+        
+        // Check normal assignees
+        const assigneeImages = issue.querySelectorAll('img[alt], img[title]');
+        const normalAssigneeMatches = Array.from(assigneeImages).some(img => {
+          const name = img.getAttribute('alt') || img.getAttribute('title') || '';
+          return name.toLowerCase().includes(currentFilters.assignee.toLowerCase());
+        });
+        
+        // Check alternative assignees
+        const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+        const alternativeAssigneeMatches = Array.from(labelLinks).some(link => {
+          const labelSpan = link.querySelector(".gl-label-text");
+          if (labelSpan) {
+            const labelText = labelSpan.textContent.trim();
+            if (labelText.startsWith(alternativeAssigneePrefix)) {
+              const labelAssigneeName = labelText.substring(alternativeAssigneePrefix.length);
+              return labelAssigneeName.toLowerCase() === currentFilters.assignee.toLowerCase();
+            }
+          }
+          return false;
+        });
+        
+        hasAssignee = normalAssigneeMatches || alternativeAssigneeMatches;
+        if (!hasAssignee) {
+          return false;
+        }
+      }
+      
+      // Apply unassigned filter if active
+      if (currentFilters.showUnassignedOnly) {
+        const assigneeImages = issue.querySelectorAll('img[alt], img[title]');
+        const hasRealAssignee = Array.from(assigneeImages).some(img => {
+          const name = img.getAttribute('alt') || img.getAttribute('title') || '';
+          return name.trim() !== '';
+        });
+        
+        if (hasRealAssignee) {
+          return false;
+        }
+      }
+      
+      // Apply any existing label filters (for secondary label filtering)
+      if (currentFilters.labels.length > 0) {
+        const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+        const issueLabels = Array.from(labelLinks).map((link) => {
+          const href = link.getAttribute("href");
+          if (href && href.includes("label_name=")) {
+            return decodeURIComponent(href.split("label_name=")[1]?.split("&")[0] || "");
+          }
+          return "";
+        }).filter(label => label !== "");
+        
+        // Check if issue has ALL selected labels (AND logic)
+        const allLabelsMatch = currentFilters.labels.every((selectedLabel) =>
+          issueLabels.includes(selectedLabel)
+        );
+        
+        if (!allLabelsMatch) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  }
+
+  // Get all labels that appear on a given set of issues
+  function getLabelsFromIssues(issues) {
+    const labelSet = new Set();
+    const alternativeAssigneePrefix = loadAlternativeAssigneePrefix();
+    
+    issues.forEach(issue => {
+      const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+      labelLinks.forEach(link => {
+        const href = link.getAttribute("href");
+        const labelSpan = link.querySelector(".gl-label-text");
+        
+        if (href && labelSpan) {
+          const urlMatch = href.match(/label_name=([^&]+)/);
+          if (urlMatch) {
+            const labelName = decodeURIComponent(urlMatch[1]);
+            const labelText = labelSpan.textContent.trim();
+            
+            // Skip alternative assignee labels
+            if (!labelText.startsWith(alternativeAssigneePrefix)) {
+              labelSet.add(labelName);
+            }
+          }
+        }
+      });
+    });
+    
+    return Array.from(labelSet);
+  }
+
+  // Count how many of the currently filtered issues have a specific label
+  function getSmartLabelCount(labelName, filteredIssues) {
+    let count = 0;
+    const alternativeAssigneePrefix = loadAlternativeAssigneePrefix();
+    
+    filteredIssues.forEach(issue => {
+      const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+      const hasLabel = Array.from(labelLinks).some(link => {
+        const href = link.getAttribute("href");
+        const labelSpan = link.querySelector(".gl-label-text");
+        
+        if (href && labelSpan) {
+          const urlMatch = href.match(/label_name=([^&]+)/);
+          if (urlMatch) {
+            const issueLabelName = decodeURIComponent(urlMatch[1]);
+            const labelText = labelSpan.textContent.trim();
+            
+            // Skip alternative assignee labels and check for match
+            return !labelText.startsWith(alternativeAssigneePrefix) && issueLabelName === labelName;
+          }
+        }
+        return false;
+      });
+      
+      if (hasLabel) {
+        count++;
+      }
+    });
+    
+    return count;
+  }
+
+  function applySmartLabelFiltering() {
+    // Get all currently filtered/visible issues
+    const filteredIssues = getFilteredIssuesForSmartFiltering();
+    const relevantLabels = getLabelsFromIssues(filteredIssues);
+    
+    console.log(`Smart filtering: Found ${filteredIssues.length} filtered issues with ${relevantLabels.length} relevant labels`);
+    
+    // Hide/show labels based on relevance
+    const allLabelItems = document.querySelectorAll('.label-item');
+    allLabelItems.forEach(labelItem => {
+      const labelName = labelItem.getAttribute('data-label-name');
+      const isSelected = currentFilters.labels.includes(labelName);
+      const isRelevant = relevantLabels.includes(labelName);
+      
+      // Always show selected labels, hide irrelevant unselected labels
+      if (isSelected || isRelevant) {
+        labelItem.style.display = 'flex';
+      } else {
+        labelItem.style.display = 'none';
+      }
+    });
+  }
+
   function updateLabelCounts(labels) {
     // Check if Kanban board is active
     const kanbanBoard = document.querySelector("#kanban-board");
     const isKanbanActive = kanbanBoard && kanbanBoard.style.display !== "none";
+    
+    // Apply smart filtering if there are active filters
+    const hasActiveFilters = currentFilters.assignee || currentFilters.labels.length > 0 || currentFilters.showUnassignedOnly;
+    
+    let filteredIssues = null;
+    if (hasActiveFilters) {
+      applySmartLabelFiltering();
+      // Get filtered issues for smart counting
+      filteredIssues = getFilteredIssuesForSmartFiltering();
+    } else {
+      // Show all labels when no filters are active
+      const allLabelItems = document.querySelectorAll('.label-item');
+      allLabelItems.forEach(labelItem => {
+        labelItem.style.display = 'flex';
+      });
+    }
     
     labels.forEach((label) => {
       const labelItem = document.querySelector(
@@ -1735,62 +1913,23 @@
         if (countSpan) {
           let count;
 
-          if (isKanbanActive) {
-            // For Kanban view: use the original label count (don't recount from cards)
-            // This prevents circular dependency with filtering
+          if (hasActiveFilters && filteredIssues) {
+            // Use smart counting based on currently filtered issues
+            count = getSmartLabelCount(label.name, filteredIssues);
+          } else if (isKanbanActive) {
+            // For Kanban view with no filters: use the original label count
             count = label.count;
           } else {
-            // For main view: use existing logic
-          // Check if there's an active search
-          const searchInput = document.getElementById("issue-title-search");
-          const hasActiveSearch =
-            searchInput && searchInput.value.trim() !== "";
-
-          // If this label is already selected, show its original count
-          if (currentFilters.labels.includes(label.name)) {
-            count = getFilteredIssueCountWithMultipleLabels(
-              label.name,
-              currentFilters.assignee,
-              currentFilters.labels
-            );
-          } else if (
-            currentFilters.assignee ||
-            currentFilters.labels.length > 0
-          ) {
-            // Count issues that have this label AND the current filters
-            count = getFilteredIssueCountWithMultipleLabels(
-              label.name,
-              currentFilters.assignee,
-              currentFilters.labels
-            );
-          } else {
+            // For main view with no filters: use original count
             count = label.count;
-          }
-
-          // If there's an active search, further filter by search term
-          if (hasActiveSearch) {
-            count = getFilteredIssueCountWithSearch(
-              label.name,
-              currentFilters.assignee,
-              currentFilters.labels,
-              searchInput.value
-            );
-            }
           }
 
           countSpan.textContent = `(${count})`;
 
-          // Hide labels with zero count when filtering (but keep selected labels visible)
-          const hasActiveFilters =
-            currentFilters.assignee ||
-            currentFilters.labels.length > 0 ||
-            (document.getElementById("issue-title-search")?.value.trim() !== "");
+          // The visibility is already handled by applySmartLabelFiltering above
+          // But we need to ensure selected labels are always visible
           const isSelectedLabel = currentFilters.labels.includes(label.name);
-
-          // Hide the label if it has zero count and there are active filters (unless it's selected)
-          if (hasActiveFilters && count === 0 && !isSelectedLabel) {
-            labelItem.style.display = "none";
-          } else {
+          if (isSelectedLabel) {
             labelItem.style.display = "flex";
           }
         }
