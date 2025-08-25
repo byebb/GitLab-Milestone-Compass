@@ -1695,15 +1695,20 @@
       if (isAlternative) {
         // Check for alternative assignee labels
         const labelLinks = issue.querySelectorAll(".gl-label .gl-label-link");
+        console.log(`[getOpenIssueCountForAssignee] ${issueTitle}: Checking ${labelLinks.length} labels for alternative assignee "${assigneeName}"`);
+        
         hasAssignee = Array.from(labelLinks).some(link => {
           const labelSpan = link.querySelector(".gl-label-text");
           if (labelSpan) {
             const labelText = labelSpan.textContent.trim();
+            console.log(`[getOpenIssueCountForAssignee] ${issueTitle}: Found label "${labelText}"`);
+            
             if (labelText.startsWith(alternativeAssigneePrefix)) {
               const labelAssigneeName = labelText.substring(alternativeAssigneePrefix.length);
               const isMatch = labelAssigneeName.toLowerCase() === assigneeName.toLowerCase();
+              console.log(`[getOpenIssueCountForAssignee] ${issueTitle}: Alternative assignee "${labelAssigneeName}" vs "${assigneeName}" = ${isMatch}`);
               if (isMatch) {
-                console.log(`[getOpenIssueCountForAssignee] ${issueTitle}: Found alternative assignee match "${labelText}"`);
+                console.log(`[getOpenIssueCountForAssignee] ${issueTitle}: ✅ Found alternative assignee match "${labelText}"`);
               }
               return isMatch;
             }
@@ -1785,10 +1790,48 @@
     return false; // Default to open if we can't determine status
   }
 
+  // Force hide assignees with zero open issues (used when Hide Closed is active)
+  function hideAssigneesWithoutOpenIssues() {
+    const assignees = extractAssignees();
+    console.log(`[hideAssigneesWithoutOpenIssues] Checking ${assignees.length} assignees...`);
+    
+    assignees.forEach(assignee => {
+      const openCount = getOpenIssueCountForAssignee(assignee.name, assignee.isAlternative);
+      const assigneeItem = document.querySelector(`[data-assignee-name="${assignee.name}"]`);
+      
+      if (assigneeItem) {
+        const isSelected = currentFilters.assignee === assignee.name;
+        
+        console.log(`[hideAssigneesWithoutOpenIssues] ${assignee.name} (${assignee.isAlternative ? 'ALT' : 'NORMAL'}): ${openCount} open issues, selected: ${isSelected}`);
+        
+        if (openCount === 0 && !isSelected) {
+          console.log(`[hideAssigneesWithoutOpenIssues] FORCE HIDING ${assignee.name}`);
+          assigneeItem.style.display = "none";
+          
+          // Also update the count to show (0)
+          const countSpan = assigneeItem.querySelector(".issue-count");
+          if (countSpan) {
+            countSpan.textContent = "(0)";
+          }
+        } else {
+          console.log(`[hideAssigneesWithoutOpenIssues] KEEPING ${assignee.name} visible`);
+          assigneeItem.style.display = "flex";
+          
+          // Update count to show actual open issues
+          const countSpan = assigneeItem.querySelector(".issue-count");
+          if (countSpan) {
+            countSpan.textContent = `(${openCount})`;
+          }
+        }
+      }
+    });
+  }
+
   function updateAssigneeCounts(assignees) {
     // Check if Hide Closed toggle is active
     const hideClosedState = loadHideClosedState();
     console.log(`[updateAssigneeCounts] Hide Closed State: ${hideClosedState}`);
+    console.log(`[updateAssigneeCounts] Processing ${assignees.length} assignees:`, assignees.map(a => `${a.name}(${a.isAlternative ? 'ALT' : 'NORMAL'})`));
     
     assignees.forEach((assignee) => {
       const assigneeItem = document.querySelector(
@@ -1839,9 +1882,13 @@
           const isSelectedAssignee = currentFilters.assignee === assignee.name;
           const hasActiveFilters = currentFilters.labels.length > 0 || hasActiveSearch || hideClosedState;
           
+          console.log(`[updateAssigneeCounts] ${assignee.name}: count=${count}, isSelected=${isSelectedAssignee}, hasActiveFilters=${hasActiveFilters}, hideClosedState=${hideClosedState}`);
+          
           if (hasActiveFilters && count === 0 && !isSelectedAssignee) {
+            console.log(`[updateAssigneeCounts] HIDING ${assignee.name} (zero count with active filters)`);
             assigneeItem.style.display = "none";
           } else {
+            console.log(`[updateAssigneeCounts] SHOWING ${assignee.name}`);
             assigneeItem.style.display = "flex";
           }
         }
@@ -3405,6 +3452,7 @@
         applyKanbanFilters();
         
         // Update assignee counts when Hide Closed toggle changes
+        console.log(`[Hide Closed Toggle] State changed to: ${hideClosedIssues}`);
         const assignees = extractAssignees();
         updateAssigneeCounts(assignees);
         
@@ -4162,6 +4210,17 @@
     console.log(`GitLab Milestone Compass: [applyKanbanFilters] About to update column counts...`);
     updateKanbanColumnCounts();
     console.log(`GitLab Milestone Compass: [applyKanbanFilters] Filters applied and column counts updated.`);
+    
+      // CRITICAL: Update assignee counts after applying Kanban filters
+    console.log(`GitLab Milestone Compass: [applyKanbanFilters] Updating assignee counts...`);
+    const assignees = extractAssignees();
+    updateAssigneeCounts(assignees);
+    
+    // FORCE hide assignees with zero open issues when Hide Closed is active
+    if (hideClosedState) {
+      console.log(`GitLab Milestone Compass: [applyKanbanFilters] Force hiding assignees with zero open issues...`);
+      hideAssigneesWithoutOpenIssues();
+    }
     
     // Final check on column visibility
     const columns = document.querySelectorAll('.kanban-column');
